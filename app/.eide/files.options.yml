@@ -1,0 +1,5 @@
+version: "2.1"
+options:
+    app:
+        files: {}
+        virtualPathFiles: {}

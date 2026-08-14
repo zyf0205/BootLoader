@@ -1,0 +1,33 @@
+{
+    "folders": [
+        {
+            "name": "Bootloader",
+            "path": "bootloader"
+        },
+        {
+            "name": "APP",
+            "path": "app"
+        }
+    ],
+    "settings": {
+        "terminal.integrated.shellIntegration.enabled": false,
+        "clangd.arguments": [
+            "--header-insertion=never"
+        ],
+        "files.autoGuessEncoding": true,
+        "C_Cpp.default.configurationProvider": "cl.eide",
+        "C_Cpp.errorSquiggles": "disabled",
+        "files.associations": {
+            "*.h": "c",
+            "*.c": "c",
+            "*.s": "arm"
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "cl.eide",
+            "keroc.hex-fmt",
+            "zixuanwang.linkerscript"
+        ]
+    }
+}

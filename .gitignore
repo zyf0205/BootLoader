@@ -1,0 +1,57 @@
+# ==============================================================
+# STM32 Bootloader Project
+# ==============================================================
+
+# ---- 编译产物 ----
+*.o
+*.d
+*.crf
+*.axf
+*.elf
+*.hex
+*.bin
+*.map
+*.htm
+*.lnp
+*.s19
+*.lst
+*.dep
+*.build_log.*
+*._ia
+*.pack
+
+# ---- EIDE 构建目录 ----
+build/
+
+# ---- EIDE 用户本地配置 ----
+*.eide.usr.ctx.json
+.eide/log/
+
+# ---- Keil 用户配置 ----
+*.uvguix.*
+*.uvoptx
+*.bak
+*.Administrator
+
+# ---- 调试配置 ----
+DebugConfig/
+JLinkSettings.ini
+
+# ---- 编辑器/系统 ----
+.vscode/settings.json
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp
+*.swp
+*.swo
+*~
+# ---- 测试产物 ----
+tests/ymodem/test_ymodem
+
+# ---- EIDE 依赖缓存 ----
+.eide/.de/
+.eide/.usr/
+
+# ---- STLink 选项字节 (烧录时生成) ----
+*.st.option.bytes.ini
