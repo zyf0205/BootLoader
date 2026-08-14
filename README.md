@@ -1,108 +1,78 @@
-# STM32F411 串口 Bootloader (YMODEM)
+# STM32F411 串口 Bootloader(YMODEM)
 
-基于 **YMODEM 协议**的 STM32F411CEU6 串口 Bootloader,使用任何支持 YMODEM 的终端工具(如 **Tera Term**)即可完成固件升级,无需自研上位机。
+一个基于 **YMODEM 协议**的 STM32F411CEU6 串口 Bootloader:用任何支持 YMODEM 的终端软件(推荐 **Tera Term**)就能升级固件,不需要自研上位机。
 
-## 特性
+## 它能干什么
 
-- **YMODEM 协议**: 标准 CRC 模式, 1K 数据包, 兼容主流终端软件
-- **可靠传输**: 每包 CRC16 校验 + 出错 NAK 重传 + 超时重试 + CAN 中止
-- **三重 APP 校验**: 元数据魔数 + 堆栈指针 + Reset 向量
-- **硬件 CRC32**: 升级完成后全量校验并存入元数据区
-- **多种进入方式**: 按键保持复位 / APP 长按请求 / 无有效 APP 自动进入
-- **DMA 收发**: 环形缓冲接收 + TC 中断非阻塞发送
-- **状态 LED**: 慢闪=等待 / 快闪=接收 / 常亮=成功
-- **平台无关协议层**: YMODEM 状态机零硬件依赖, 附带 Linux 单元测试
+```
+电脑 (Tera Term)  ──USB转串口──> 开发板
+   选择 .bin 文件, 点发送 ────────> 自动完成: 擦除 -> 写入 -> CRC 校验 -> 跳转新固件
+```
+
+- 工厂首次烧录后,之后升级**只插 USB 转串口,不用 ST-Link**
+- 升级过程每包 CRC 校验,错了自动重传,中途断线也不会写坏 Flash
+- 升级失败随时重来:设备会自动回到等待状态
+- 固件带版本号(文件名 `app_v1.2.bin`),版本自动记录在 Flash 里
+
+## 文档导航
+
+| 文档 | 内容 | 什么时候看 |
+|------|------|-----------|
+| [快速上手](docs/快速上手.md) | 环境准备、编译烧录、第一次升级完整步骤 | **第一次用必看** |
+| [架构详解](docs/架构详解.md) | 分层设计、启动/升级流程、代码阅读路线图 | 想改代码前看 |
+| [YMODEM 协议说明](docs/YMODEM协议说明.md) | 协议帧格式、交互时序、差错恢复 | 想深入协议时看 |
+| [常见问题](docs/常见问题.md) | 串口没输出、升级失败、改引脚等 | 遇到问题时看 |
 
 ## 目录结构
 
 ```
-├── bootloader/               # Bootloader 工程 (EIDE, 自包含)
-│   ├── core/                 # 入口: main.c, 异常处理
-│   ├── config/               # Flash 分区 / 行为配置 / 版本
-│   ├── drivers/              # 驱动: usart (DMA), flash, crc32 (硬件)
-│   ├── protocols/ymodem/     # YMODEM 状态机 + CRC16 (平台无关)
-│   ├── app/                  # 应用层: boot 启动决策, updater 升级状态机
-│   ├── modules/              # 板级模块: board/led/key/systick/bootapi
-│   ├── libraries/            # CMSIS + StdPeriph 库
+BootLoader/
+├── bootloader/               # Bootloader 工程 (完整独立, 可直接拷贝)
+│   ├── core/                 # 入口: main.c + 中断处理
+│   ├── config/               # Flash 分区 / 超时等配置 / 版本号
+│   ├── drivers/              # 串口(DMA)/Flash/CRC32 驱动
+│   ├── protocols/ymodem/     # YMODEM 协议状态机 (纯 C, 不依赖硬件)
+│   ├── app/                  # 启动决策 + 升级状态机
+│   ├── modules/              # LED/按键/系统节拍/板级引脚定义
+│   ├── libraries/            # CMSIS + StdPeriph 标准库
 │   └── .eide/                # EIDE 工程配置
-├── app/                      # APP 演示工程 (EIDE, 自包含, 结构同上)
-│   ├── core/                 # main.c (LED 闪烁 + 长按进入 Bootloader)
-│   ├── config/ modules/ libraries/ .eide/
-├── tests/ymodem/             # YMODEM 状态机单元测试 (gcc)
-├── tools/build_check.sh      # WSL 下调用 Windows AC5 的编译验证脚本
-└── docs/                     # 架构与协议文档
+├── app/                      # APP 演示工程 (完整独立, 结构同上)
+│                              # 功能: LED 闪烁 + 长按按键回到 Bootloader
+├── docs/                     # 项目文档
+├── tests/ymodem/             # 协议单元测试 (电脑上跑, 无需硬件)
+├── tools/build_check.sh      # 编译验证脚本 (WSL 调用 Windows 工具链)
+├── AGENTS.md                 # AI 助手构建参考 (普通人可忽略)
+└── BootLoader.code-workspace # VSCode 工作区, 双击打开
 ```
 
-> 两个工程完全独立, 各自携带所需的库与模块, 可直接拷贝使用。
+## 快速开始 (30 秒版)
 
-## 快速开始
+1. **编译烧录**:VSCode 打开 `BootLoader.code-workspace`(需装 EIDE 插件)→ 构建 `bootloader` 目标 → ST-Link 烧录
+2. **构建固件**:构建 `app` 目标,得到 `app/build/app/App.bin`
+3. **升级**:Tera Term 打开串口(115200)→ `File → Transfer → YMODEM → Send` → 选 App.bin → 完成
 
-### 编译烧录
+> 详细步骤、软件安装、首次部署流程见 [快速上手](docs/快速上手.md)。
 
-1. 用 VSCode 打开 `BootLoader.code-workspace`(需安装 **EIDE** 插件)
-2. Bootloader 工程: 构建 `bootloader` 目标 -> 烧录 (ST-Link, 0x08000000)
-3. APP 工程: 构建 `app` 目标 -> 生成 `build/app/App.bin`
+## 硬件资源
 
-> **首次部署推荐流程**: ST-Link 只烧录 Bootloader,然后按下方"串口升级"步骤用 YMODEM 发送 App.bin,一次性完成 APP 安装 + 元数据写入。
->
-> 注意: 如果用 ST-Link 直接把 APP 烧到 0x08004000,元数据区仍是空的, Bootloader 会判定"无有效 APP"进入升级模式——这是预期行为(元数据是 APP 有效性的唯一权威),再走一次 YMODEM 升级即可正常跳转。
-
-### 串口升级 (Tera Term)
-
-1. USB 转串口连接开发板 (USART1: PA9-TX, PA10-RX, 115200-8-N-1)
-2. 打开 Tera Term, 配置串口
-3. 复位开发板:
-   - 无有效 APP: 自动进入升级模式, 周期性发送 `C`
-   - 有有效 APP: 5 秒窗口内开始传输, 或**按住 KEY 复位**强制进入
-   - APP 运行中: **长按 KEY 2 秒**请求重入
-4. 菜单 `File -> Transfer -> YMODEM -> Send...`
-5. 选择固件 `build/app/App.bin` (勾选 CRC 校验)
-6. 完成后自动跳转 APP
-
-> 固件文件名含版本号时 (如 `app_v1.2.bin`) 会自动解析版本写入元数据。
-
-### 单元测试
-
-```bash
-cd tests/ymodem && make test
-```
-
-### 编译验证 (WSL 调用 Windows Keil AC5, 无需 EIDE)
-
-```bash
-bash tools/build_check.sh
-```
-
-输出 `build/check/Bootloader.bin` (需 < 16KB) 与 `build/check/App.bin`。
+| 资源 | 引脚 | 说明 |
+|------|------|------|
+| 调试串口 | PA9 (TX) / PA10 (RX) | USART1, 115200-8-N-1 |
+| 状态 LED | PA1 | 低电平点亮 |
+| 用户按键 | PC13 | 低电平按下 |
+| 系统时钟 | HSI 16MHz → PLL 96MHz | 可切换 HSE 25MHz,见 `libraries/cmsis/system/system_stm32f4xx.h` |
 
 ## Flash 分区
 
-| 区域       | 地址        | 大小  | Sector  | 用途         |
-|------------|-------------|-------|---------|--------------|
-| Bootloader | 0x08000000  | 16KB  | 0       | 启动 + YMODEM |
-| APP        | 0x08004000  | 240KB | 1-5     | 应用程序     |
-| Metadata   | 0x08040000  | 128KB | 6       | 固件信息 16B |
-| Reserved   | 0x08060000  | 128KB | 7       | 预留         |
-
-## 启动流程
-
-```
-复位
- ├─ 备份寄存器魔数? ── 是 ──> APP 请求重入 ──┐
- ├─ 按住 KEY? ──────── 是 ──> 按键触发 ──────┤
- ├─ APP 有效? ──────── 否 ──> 无有效 APP ────┼──> 升级模式 (无限等待 YMODEM)
- └─ 是: 5s 窗口等待 YMODEM ─┬─ 收到文件头 ────┘
-                            └─ 超时 ──> 跳转 APP
-```
+| 区域 | 地址 | 大小 | 说明 |
+|------|------|------|------|
+| Bootloader | 0x08000000 | 16KB | 只读, ST-Link 烧录 |
+| APP | 0x08004000 | 240KB | 串口升级写入 |
+| 元数据 | 0x08040000 | 128KB | 只存 16B: 固件大小/CRC32/版本 |
 
 ## 开发环境
 
-- VSCode + [EIDE](https://em-ide.com) 插件
-- ARM Compiler 5 (AC5), microlib
-- STM32F4xx StdPeriph 库
-- 硬件: STM32F411CEU6 (Black Pill), 时钟 96MHz (HSI/HSE 可选)
-
-## 文档
-
-- [架构设计](docs/architecture.md)
-- [YMODEM 协议说明](docs/ymodem-protocol.md)
+- Windows + VSCode + [EIDE](https://em-ide.com) 插件(工程管理、编译、烧录)
+- Keil MDK v5.32 +(提供 AC5 编译器, EIDE 调用)
+- Tera Term(串口升级)
+- 测试:Linux/WSL + gcc(`cd tests/ymodem && make test`)
