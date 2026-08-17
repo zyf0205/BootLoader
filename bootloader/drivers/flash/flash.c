@@ -123,6 +123,10 @@ uint8_t Flash_IsAppValid(void)
     if (reset < APP_ADDR || reset >= APP_END_ADDR || (reset & 1) == 0)
         return 0;
 
+    /* 4. 启动前对照元数据校验完整固件 */
+    if (Flash_CalcAppCrc32(meta.size) != meta.crc32)
+        return 0;
+
     return 1;
 }
 
@@ -159,9 +163,33 @@ uint32_t Flash_CalcAppCrc32(uint32_t size)
     return CRC->DR;
 }
 
-/* ---- 保存元数据 ---- */
+/* ---- 使旧固件元数据失效 (擦除 APP 前调用) ---- */
+flash_err_t Flash_InvalidateMeta(void)
+{
+    const fw_meta_t *stored = (const fw_meta_t *)META_ADDR;
+    FLASH_Status status;
+
+    if (stored->magic != META_MAGIC)
+        return FLASH_OK;
+
+    FLASH_Unlock();
+    FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_OPERR |
+                    FLASH_FLAG_WRPERR | FLASH_FLAG_PGAERR |
+                    FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
+    status = FLASH_ProgramWord(META_ADDR, 0);
+    FLASH_Lock();
+
+    if (status != FLASH_COMPLETE || *(volatile uint32_t *)META_ADDR != 0)
+        return FLASH_ERR_WRITE;
+    return FLASH_OK;
+}
+
+/* ---- 保存元数据: 内容先写, magic 最后提交 ---- */
 flash_err_t Flash_SaveMeta(const fw_meta_t *meta)
 {
+    const uint32_t *p;
+    uint32_t i;
+
     if (meta == NULL)
         return FLASH_ERR_PARAM;
 
@@ -170,8 +198,8 @@ flash_err_t Flash_SaveMeta(const fw_meta_t *meta)
 
     FLASH_Unlock();
 
-    const uint32_t *p = (const uint32_t *)meta;
-    for (uint32_t i = 0; i < sizeof(fw_meta_t) / 4; i++)
+    p = (const uint32_t *)meta;
+    for (i = 1; i < sizeof(fw_meta_t) / 4; i++)
     {
         if (FLASH_ProgramWord(META_ADDR + i * 4, p[i]) != FLASH_COMPLETE)
         {
@@ -180,7 +208,16 @@ flash_err_t Flash_SaveMeta(const fw_meta_t *meta)
         }
     }
 
+    if (FLASH_ProgramWord(META_ADDR, p[0]) != FLASH_COMPLETE)
+    {
+        FLASH_Lock();
+        return FLASH_ERR_WRITE;
+    }
+
     FLASH_Lock();
+
+    if (memcmp((const void *)META_ADDR, meta, sizeof(fw_meta_t)) != 0)
+        return FLASH_ERR_VERIFY;
     return FLASH_OK;
 }
 

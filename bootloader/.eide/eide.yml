@@ -27,6 +27,7 @@ virtualFolder:
     - name: App
       files:
         - path: app/boot.c
+        - path: app/boot_policy.c
         - path: app/updater.c
       folders: []
     - name: Modules

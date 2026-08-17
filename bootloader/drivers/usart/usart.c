@@ -1,6 +1,7 @@
 #include "usart.h"
 #include "board.h"
 #include "flash_config.h"
+#include "systick.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -13,6 +14,7 @@
 #define RX_DMA_CHANNEL  DMA_Channel_4
 #define TX_DMA_STREAM   DMA2_Stream7
 #define TX_DMA_CHANNEL  DMA_Channel_4
+#define TX_DRAIN_TIMEOUT_MS  100
 
 /* ---- RX 环形缓冲 ---- */
 static uint8_t  s_rx_buf[USART_RX_BUF_SIZE];
@@ -187,11 +189,26 @@ void Usart_FlushRx(void)
 
 void Usart_WaitTxIdle(void)
 {
+    uint32_t start = Systick_GetTick();
+
     while (s_tx_active)
     {
+        if ((Systick_GetTick() - start) >= TX_DRAIN_TIMEOUT_MS)
+        {
+            DMA_Cmd(TX_DMA_STREAM, DISABLE);
+            DMA_ClearFlag(TX_DMA_STREAM,
+                          DMA_FLAG_TCIF7 | DMA_FLAG_HTIF7 | DMA_FLAG_TEIF7 |
+                          DMA_FLAG_DMEIF7 | DMA_FLAG_FEIF7);
+            s_tx_active = 0;
+            break;
+        }
     }
+
+    start = Systick_GetTick();
     while (USART_GetFlagStatus(CONSOLE_USART, USART_FLAG_TC) == RESET)
     {
+        if ((Systick_GetTick() - start) >= TX_DRAIN_TIMEOUT_MS)
+            break;
     }
 }
 

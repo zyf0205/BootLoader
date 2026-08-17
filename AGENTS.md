@@ -4,7 +4,7 @@
 
 STM32F411CEU6 串口 Bootloader(YMODEM 协议),包含两个**自包含独立工程**:
 - `bootloader/` - Bootloader 工程 (Keil + EIDE, 链接地址 0x08000000, 限 16KB)
-- `app/` - APP 演示工程 (Keil + EIDE, 链接地址 0x08004000, LED + 长按重入 BL)
+- `app/` - APP 演示工程 (Keil + EIDE, 链接地址 0x08004000, LED 心跳；保留软件重入 API)
 
 每个工程自带 `libraries/`(CMSIS + StdPeriph 全量)与 `modules/`(board/led/key/systick/bootapi),互不依赖。
 开发板使用 12MHz HSE,两个工程均配置为 96MHz SYSCLK。
@@ -26,6 +26,7 @@ YMODEM 协议单元测试 (Linux gcc, 与硬件无关):
 
 ```bash
 cd tests/ymodem && make test
+cd tests/boot_policy && make test
 ```
 
 ## AC5 关键编译知识 (踩过的坑)

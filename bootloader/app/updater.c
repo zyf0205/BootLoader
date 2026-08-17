@@ -90,12 +90,13 @@ static uint8_t IsHexFile(const char *name)
            ext[3] == '\0';
 }
 
-/* 发送回调: 等待 TX 空闲后发送 (协议为同步请求-应答, 阻塞可接受) */
+/* 协议控制字节使用阻塞发送，确保 ACK/NAK/C 已交给 USART 后再推进状态机。 */
 static int YmodemSend(const uint8_t *data, uint16_t len)
 {
-    while (Usart_Send(data, len) != 0)
-    {
-    }
+    uint16_t i;
+
+    for (i = 0; i < len; i++)
+        Usart_Putc(data[i]);
     return 0;
 }
 
@@ -136,6 +137,15 @@ static int OnPrepare(void)
 {
     flash_err_t err;
 
+    printf("Invalidating old metadata...");
+    err = Flash_InvalidateMeta();
+    if (err != FLASH_OK)
+    {
+        printf("FAILED\r\n");
+        return -1;
+    }
+    printf("OK\r\n");
+
     printf("Erasing APP region...");
     err = Flash_EraseApp();
     if (err != FLASH_OK)
@@ -153,7 +163,7 @@ static int OnData(const uint8_t *data, uint16_t len)
     uint32_t written = s_write_addr - APP_ADDR;
     uint32_t remain  = (s_fw_size > written) ? (s_fw_size - written) : 0;
 
-    /* YMODEM 末包按 1024/128 对齐填充, 实际写入量以文件大小为准 */
+    /* YMODEM 末包按 128/1024 字节对齐填充, 实际写入量以文件大小为准 */
     uint16_t write_len = (remain < len) ? (uint16_t)remain : len;
     if (write_len == 0)
     {
@@ -195,7 +205,7 @@ static void Restart(void)
     s_state = UPDATER_WAITING;
 }
 
-/* 传输完成: CRC32 校验 + 保存元数据, 成功后延时跳转 APP */
+/* 传输完成: CRC32 校验 + 保存元数据, 成功后延时复位启动 APP */
 static void Finalize(void)
 {
     fw_meta_t meta;
@@ -231,7 +241,7 @@ static void Finalize(void)
     }
     printf("OK\r\n");
 
-    printf("\r\nUpdate success! Jumping to APP in %d s...\r\n",
+    printf("\r\nUpdate success! Rebooting to APP in %d s...\r\n",
            BOOT_JUMP_DELAY_MS / 1000);
     Led_Set(LED_ON);
 
@@ -305,10 +315,7 @@ void Updater_Process(void)
 
     case UPDATER_SUCCESS:
         if ((Systick_GetTick() - s_done_tick) >= BOOT_JUMP_DELAY_MS)
-        {
-            Boot_JumpToApp();       /* 正常情况不会返回 */
-            NVIC_SystemReset();     /* 跳转失败兜底: 复位重来 */
-        }
+            Boot_ResetAfterUpdate();
         break;
 
     case UPDATER_TIMEOUT:

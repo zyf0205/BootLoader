@@ -48,6 +48,7 @@ Desktop.ini
 *~
 # ---- 测试产物 ----
 tests/ymodem/test_ymodem
+tests/boot_policy/test_boot_policy
 
 # ---- EIDE 依赖缓存 ----
 .eide/.de/

@@ -33,13 +33,14 @@ flash_err_t Flash_EraseApp(void);
 /* 写入数据 (4 字节对齐效率最高), 带写回读验证 */
 flash_err_t Flash_Write(uint32_t addr, const uint8_t *buf, uint32_t len);
 
-/* 检查 APP 是否有效: 元数据 + MSP + Reset 向量三重校验 */
+/* 检查 APP 是否有效: 元数据 + 向量表 + CRC32 */
 uint8_t Flash_IsAppValid(void);
 
 /* 计算 APP 区固件 CRC32 */
 uint32_t Flash_CalcAppCrc32(uint32_t size);
 
 /* 保存/读取元数据 */
+flash_err_t Flash_InvalidateMeta(void);
 flash_err_t Flash_SaveMeta(const fw_meta_t *meta);
 uint8_t     Flash_LoadMeta(fw_meta_t *meta);
 

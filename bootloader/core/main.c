@@ -23,7 +23,7 @@ static void PrintBanner(void)
 {
     printf("\r\n============================================\r\n");
     printf("  STM32F411 Bootloader v%s\r\n", BL_VERSION_STR);
-    printf("  Protocol : YMODEM (CRC16, 128B/1K packet)\r\n");
+    printf("  Protocol : YMODEM (CRC16, SOH/STX)\r\n");
     printf("  Build    : %s %s\r\n", __DATE__, __TIME__);
     printf("============================================\r\n");
 }
@@ -31,6 +31,10 @@ static void PrintBanner(void)
 int main(void)
 {
     boot_reason_t reason;
+    uint8_t app_requested;
+    uint8_t post_update;
+    uint8_t key_held;
+    uint8_t app_valid;
 
     /* ---- 1. 硬件初始化 ---- */
     Systick_Init();
@@ -42,51 +46,39 @@ int main(void)
 
     PrintBanner();
 
-    /* ---- 2. 启动决策 ---- */
-    reason = Boot_GetReason();
+    /* ---- 2. 确定性启动决策 ---- */
+    post_update   = Boot_TakePostUpdate();
+    app_requested = Boot_TakeAppRequest();
+    key_held      = (app_requested || post_update) ? 0 : Boot_IsUpdateKeyHeld();
+    app_valid     = (app_requested || key_held) ? 0 : Flash_IsAppValid();
+    reason        = BootPolicy_Select(app_requested, key_held, app_valid);
 
-    if (reason == BOOT_REASON_POWER_ON && Flash_IsAppValid())
+    if (reason == BOOT_REASON_NORMAL)
     {
-        /* APP 有效: 打开升级窗口, 超时未收到 YMODEM 则跳转 APP */
-        printf("\r\nAPP is valid.\r\n");
-        printf("Waiting %d s for YMODEM transfer...\r\n",
-               BOOT_WAIT_TIMEOUT_MS / 1000);
-        printf("(Hold KEY and press RESET to force update)\r\n\r\n");
-
-        Led_Set(LED_BLINK_SLOW);
-        Updater_Begin(BOOT_WAIT_TIMEOUT_MS);
-
-        while (!Updater_Finished())
-        {
-            Updater_Process();
-        }
-
-        if (Updater_State() == UPDATER_TIMEOUT)
-        {
-            printf("\r\nNo transfer, jumping to APP...\r\n");
-            Boot_JumpToApp();
-        }
-        /* SUCCESS 状态继续向下, 由主循环完成跳转 */
+        printf("\r\nAPP verified. Jumping...\r\n");
+        Boot_JumpToApp();
+        printf("APP jump failed. Enter recovery mode.\r\n");
     }
-    else
+
+    switch (reason)
     {
-        /* 强制进入升级模式: 按键 / APP 请求 / 无有效 APP */
-        switch (reason)
-        {
-        case BOOT_REASON_KEY:
-            printf("\r\nKEY pressed, enter update mode.\r\n\r\n");
-            break;
-        case BOOT_REASON_APP_REQ:
-            printf("\r\nUpdate requested by APP.\r\n\r\n");
-            break;
-        default:
-            printf("\r\nNo valid APP, enter update mode.\r\n\r\n");
-            break;
-        }
-
-        Led_Set(LED_BLINK_SLOW);
-        Updater_Begin(0);   /* 无限等待 */
+    case BOOT_REASON_KEY:
+        printf("\r\nUpdate key held during reset.\r\n");
+        break;
+    case BOOT_REASON_APP_REQUEST:
+        printf("\r\nUpdate requested by APP.\r\n");
+        break;
+    case BOOT_REASON_INVALID_APP:
+        printf("\r\nAPP is missing or invalid.\r\n");
+        break;
+    default:
+        printf("\r\nRecovery mode.\r\n");
+        break;
     }
+
+    printf("Waiting for YMODEM (send App.bin)...\r\n\r\n");
+    Led_Set(LED_BLINK_SLOW);
+    Updater_Begin(0);
 
     /* ---- 3. 升级主循环 (完成后自动跳转 APP) ---- */
     while (1)

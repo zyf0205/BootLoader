@@ -405,8 +405,9 @@
         <Group>
           <GroupName>App</GroupName>
           <Files>
-            <File><FileName>boot.c</FileName><FileType>1</FileType><FilePath>app/boot.c</FilePath></File>
-            <File><FileName>updater.c</FileName><FileType>1</FileType><FilePath>app/updater.c</FilePath></File>
+             <File><FileName>boot.c</FileName><FileType>1</FileType><FilePath>app/boot.c</FilePath></File>
+             <File><FileName>boot_policy.c</FileName><FileType>1</FileType><FilePath>app/boot_policy.c</FilePath></File>
+             <File><FileName>updater.c</FileName><FileType>1</FileType><FilePath>app/updater.c</FilePath></File>
           </Files>
         </Group>
         <Group>

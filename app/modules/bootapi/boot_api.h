@@ -2,13 +2,13 @@
 #define __BOOT_API_H
 
 /* ================================================================== *
- * Bootloader <-> APP 交互接口 (v3.0)
+ * Bootloader <-> APP 交互接口 (v3.2)
  *
  * 使用方式: APP 工程将该头文件加入 include 路径,
  * 在需要进入升级模式时调用 Boot_RequestBootloader()。
  *
  * 原理:
- *   1. 将魔数写入备份寄存器 (软件复位不丢失, 上电复位清零)
+ *   1. 将魔数及其反码写入两个备份寄存器
  *   2. 触发软件复位
  *   3. Bootloader 启动后检测到魔数, 清除并进入升级模式
  * ================================================================== */
@@ -18,10 +18,11 @@
 /* APP 请求重入 Bootloader 的魔数 (双方约定) */
 #define BOOT_REQUEST_MAGIC   0xDEADBEEF
 #define BOOT_BKP_REG         RTC->BKP1R
+#define BOOT_BKP_INV_REG     RTC->BKP2R
 
 /* ---- Bootloader 固件信息 (APP 与 BL 共享, 需保持一致) ---- */
 #define BOOT_BL_VERSION_MAJOR  3
-#define BOOT_BL_VERSION_MINOR  0
+#define BOOT_BL_VERSION_MINOR  2
 #define BOOT_APP_BASE_ADDR     0x08004000    /* APP 起始地址 (Sector 1) */
 #define BOOT_APP_MAX_SIZE      0x3C000       /* APP 最大 240KB */
 
@@ -40,6 +41,7 @@ static inline void Boot_RequestBootloader(void)
     PWR->CR |= PWR_CR_DBP;
 
     BOOT_BKP_REG = BOOT_REQUEST_MAGIC;
+    BOOT_BKP_INV_REG = ~BOOT_REQUEST_MAGIC;
 
     PWR->CR &= ~PWR_CR_DBP;
 

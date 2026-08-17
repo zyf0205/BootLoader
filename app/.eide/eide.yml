@@ -16,7 +16,6 @@ virtualFolder:
     - name: Modules
       files:
         - path: modules/led/led.c
-        - path: modules/key/key.c
         - path: modules/systick/systick.c
       folders: []
     - name: CMSIS
@@ -45,7 +44,6 @@ targets:
         - config
         - modules/board
         - modules/led
-        - modules/key
         - modules/systick
         - modules/bootapi
         - libraries/cmsis/inc

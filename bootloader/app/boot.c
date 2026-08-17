@@ -4,44 +4,72 @@
 #include "usart.h"
 #include "key.h"
 #include "systick.h"
+#include "boot_config.h"
 
-#define KEY_HOLD_MS    50   /* 开机按键保持检测时间 */
-
-boot_reason_t Boot_GetReason(void)
+uint8_t Boot_TakeAppRequest(void)
 {
-    boot_reason_t reason = BOOT_REASON_POWER_ON;
+    uint8_t requested = 0;
 
-    /* 1. 检测 APP 重入请求 (备份寄存器魔数, 读后即清) */
     RCC->APB1ENR |= RCC_APB1ENR_PWREN;
     PWR->CR |= PWR_CR_DBP;
 
-    if (BOOT_BKP_REG == BOOT_REQUEST_MAGIC)
+    if (BOOT_BKP_REG == BOOT_REQUEST_MAGIC &&
+        BOOT_BKP_INV_REG == ~BOOT_REQUEST_MAGIC)
     {
-        BOOT_BKP_REG = 0;
-        reason = BOOT_REASON_APP_REQ;
+        requested = 1;
     }
+
+    BOOT_BKP_REG = 0;
+    BOOT_BKP_INV_REG = 0;
 
     PWR->CR &= ~PWR_CR_DBP;
+    return requested;
+}
 
-    /* 2. 按键保持检测 (消抖采样) */
-    if (reason == BOOT_REASON_POWER_ON)
+uint8_t Boot_IsUpdateKeyHeld(void)
+{
+    uint32_t i;
+
+    /* 必须在整个检测窗口保持按下，避免上电毛刺误触发。 */
+    for (i = 0; i < BOOT_KEY_HOLD_MS; i++)
     {
-        uint8_t pressed = 1;
-        for (uint32_t i = 0; i < KEY_HOLD_MS; i++)
-        {
-            if (!Key_Read())
-            {
-                pressed = 0;
-                break;
-            }
-            Systick_DelayMs(1);
-        }
-
-        if (pressed)
-            reason = BOOT_REASON_KEY;
+        if (!Key_Read())
+            return 0;
+        Systick_DelayMs(1);
     }
+    return 1;
+}
 
-    return reason;
+uint8_t Boot_TakePostUpdate(void)
+{
+    uint8_t post_update = 0;
+
+    RCC->APB1ENR |= RCC_APB1ENR_PWREN;
+    PWR->CR |= PWR_CR_DBP;
+
+    if (RTC->BKP3R == BOOT_POST_UPDATE_MAGIC)
+        post_update = 1;
+    RTC->BKP3R = 0;
+
+    PWR->CR &= ~PWR_CR_DBP;
+    return post_update;
+}
+
+void Boot_ResetAfterUpdate(void)
+{
+    Usart_WaitTxIdle();
+
+    __disable_irq();
+    RCC->APB1ENR |= RCC_APB1ENR_PWREN;
+    PWR->CR |= PWR_CR_DBP;
+    RTC->BKP3R = BOOT_POST_UPDATE_MAGIC;
+    PWR->CR &= ~PWR_CR_DBP;
+    __DSB();
+    NVIC_SystemReset();
+
+    while (1)
+    {
+    }
 }
 
 void Boot_JumpToApp(void)

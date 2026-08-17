@@ -37,7 +37,7 @@
           <bCustSvd>0</bCustSvd>
           <UseEnv>0</UseEnv>
           <BinPath></BinPath>
-          <IncludePath>./core;./config;./modules/board;./modules/led;./modules/key;./modules/systick;./modules/bootapi;./libraries/cmsis/inc;./libraries/cmsis/system;./libraries/stdperiph/inc</IncludePath>
+          <IncludePath>./core;./config;./modules/board;./modules/led;./modules/systick;./modules/bootapi;./libraries/cmsis/inc;./libraries/cmsis/system;./libraries/stdperiph/inc</IncludePath>
           <LibPath></LibPath>
           <RegisterFilePath></RegisterFilePath>
           <DBRegisterFilePath></DBRegisterFilePath>
@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F411xE,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>./core;./config;./modules/board;./modules/led;./modules/key;./modules/systick;./modules/bootapi;./libraries/cmsis/inc;./libraries/cmsis/system;./libraries/stdperiph/inc</IncludePath>
+              <IncludePath>./core;./config;./modules/board;./modules/led;./modules/systick;./modules/bootapi;./libraries/cmsis/inc;./libraries/cmsis/system;./libraries/stdperiph/inc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -357,7 +357,7 @@
               <MiscControls></MiscControls>
               <Define></Define>
               <Undefine></Undefine>
-              <IncludePath>./core;./config;./modules/board;./modules/led;./modules/key;./modules/systick;./modules/bootapi;./libraries/cmsis/inc;./libraries/cmsis/system;./libraries/stdperiph/inc</IncludePath>
+              <IncludePath>./core;./config;./modules/board;./modules/led;./modules/systick;./modules/bootapi;./libraries/cmsis/inc;./libraries/cmsis/system;./libraries/stdperiph/inc</IncludePath>
             </VariousControls>
           </Aads>
           <LDads>
@@ -367,7 +367,7 @@
             <noStLib>0</noStLib>
             <RepFail>1</RepFail>
             <useFile>0</useFile>
-            <TextAddressRange>0x08000000</TextAddressRange>
+            <TextAddressRange>0x08004000</TextAddressRange>
             <DataAddressRange>0x20000000</DataAddressRange>
             <pXoBase></pXoBase>
             <ScatterFile></ScatterFile>
@@ -390,9 +390,8 @@
         <Group>
           <GroupName>Modules</GroupName>
           <Files>
-            <File><FileName>led.c</FileName><FileType>1</FileType><FilePath>modules/led/led.c</FilePath></File>
-            <File><FileName>key.c</FileName><FileType>1</FileType><FilePath>modules/key/key.c</FilePath></File>
-            <File><FileName>systick.c</FileName><FileType>1</FileType><FilePath>modules/systick/systick.c</FilePath></File>
+             <File><FileName>led.c</FileName><FileType>1</FileType><FilePath>modules/led/led.c</FilePath></File>
+             <File><FileName>systick.c</FileName><FileType>1</FileType><FilePath>modules/systick/systick.c</FilePath></File>
           </Files>
         </Group>
         <Group>

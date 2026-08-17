@@ -27,7 +27,7 @@ BL_INC="-Ibootloader/core -Ibootloader/config \
         -Ibootloader/libraries/cmsis/inc -Ibootloader/libraries/cmsis/system \
         -Ibootloader/libraries/stdperiph/inc"
 APP_INC="-Iapp/core -Iapp/config \
-         -Iapp/modules/board -Iapp/modules/led -Iapp/modules/key \
+         -Iapp/modules/board -Iapp/modules/led \
          -Iapp/modules/systick -Iapp/modules/bootapi \
          -Iapp/libraries/cmsis/inc -Iapp/libraries/cmsis/system \
          -Iapp/libraries/stdperiph/inc"
@@ -48,6 +48,7 @@ bl_compile bootloader/drivers/crc32/crc32.c crc32
 bl_compile bootloader/protocols/ymodem/ymodem.c ymodem
 bl_compile bootloader/protocols/ymodem/crc16.c crc16
 bl_compile bootloader/app/boot.c boot
+bl_compile bootloader/app/boot_policy.c boot_policy
 bl_compile bootloader/app/updater.c updater
 bl_compile bootloader/modules/led/led.c led
 bl_compile bootloader/modules/key/key.c key
@@ -93,7 +94,6 @@ app_compile() { # $1=源文件 $2=对象名
 app_compile app/core/main.c main
 app_compile app/core/stm32f4xx_it.c it
 app_compile app/modules/led/led.c led
-app_compile app/modules/key/key.c key
 app_compile app/modules/systick/systick.c systick
 app_compile app/libraries/cmsis/system/system_stm32f4xx.c system_stm32f4xx
 app_compile app/libraries/stdperiph/src/misc.c misc

@@ -94,7 +94,7 @@ static const ymodem_callbacks_t cbs = {
     .on_abort    = cb_on_abort,
 };
 
-/* ============ 发送端模拟 (规范 YMODEM: STX 1K 包, 末包 0x1A 填充) ============ */
+/* ============ 发送端模拟 (标准 YMODEM: SOH/STX, 末包 0x1A 填充) ============ */
 
 static void tx_raw_packet(uint8_t soh_stx, uint8_t seq,
                           const uint8_t *data, uint16_t len,
@@ -127,27 +127,27 @@ static void tx_header(const char *name, uint32_t size)
 
 static void tx_data_packet(uint8_t seq, const uint8_t *data, uint16_t len)
 {
-    uint8_t buf[1024];
-    memset(buf, 0x1A, sizeof(buf));
-    memcpy(buf, data, len);
-    tx_raw_packet(0x02, seq, buf, 1024, 0xFFFF);   /* STX 1K 包 */
-}
-
-static void tx_data_packet_128(uint8_t seq, const uint8_t *data, uint16_t len)
-{
     uint8_t buf[128];
     memset(buf, 0x1A, sizeof(buf));
     memcpy(buf, data, len);
     tx_raw_packet(0x01, seq, buf, 128, 0xFFFF);    /* SOH 128 字节包 */
 }
 
-static void tx_data_packet_corrupt(uint8_t seq, const uint8_t *data,
-                                   uint16_t len, uint16_t pos)
+static void tx_data_packet_1k(uint8_t seq, const uint8_t *data, uint16_t len)
 {
     uint8_t buf[1024];
     memset(buf, 0x1A, sizeof(buf));
     memcpy(buf, data, len);
-    tx_raw_packet(0x02, seq, buf, 1024, pos);
+    tx_raw_packet(0x02, seq, buf, 1024, 0xFFFF);   /* STX 1K 数据包 */
+}
+
+static void tx_data_packet_corrupt(uint8_t seq, const uint8_t *data,
+                                   uint16_t len, uint16_t pos)
+{
+    uint8_t buf[128];
+    memset(buf, 0x1A, sizeof(buf));
+    memcpy(buf, data, len);
+    tx_raw_packet(0x01, seq, buf, 128, pos);
 }
 
 static void tx_eot(void) { ymodem_feed(0x04); }
@@ -206,6 +206,9 @@ static void test_crc16_check(void)
 static void test_full_transfer(void)
 {
     uint8_t firmware[2500];
+    uint32_t offset;
+    uint8_t seq;
+    uint16_t len;
     int i;
 
     reset_rx();
@@ -226,12 +229,17 @@ static void test_full_transfer(void)
     CHECK(got_size == sizeof(firmware), "size parsed");
     CHECK(ymodem_started() == 1, "started flag");
 
-    tx_data_packet(1, &firmware[0], 1024);
-    CHECK(last_tx() == 0x06, "ACK pkt1");
-    tx_data_packet(2, &firmware[1024], 1024);
-    CHECK(last_tx() == 0x06, "ACK pkt2");
-    tx_data_packet(3, &firmware[2048], (uint16_t)(sizeof(firmware) - 2048));
-    CHECK(last_tx() == 0x06, "ACK pkt3");
+    offset = 0;
+    seq = 1;
+    while (offset < sizeof(firmware))
+    {
+        len = (uint16_t)(sizeof(firmware) - offset);
+        if (len > 128)
+            len = 128;
+        tx_data_packet(seq++, &firmware[offset], len);
+        CHECK(last_tx() == 0x06, "ACK data packet");
+        offset += len;
+    }
 
     tx_eot();
     CHECK(ymodem_state() == YMODEM_WAIT_EOT, "WAIT_EOT after first EOT");
@@ -259,7 +267,7 @@ static void test_full_transfer(void)
     printf("test_full_transfer: PASS (%u bytes, %d pkts)\n", got_data_len, data_pkt_cnt);
 }
 
-/* 3. 不使用 1K 包的完整传输 (纯 SOH 128 字节数据包) */
+/* 3. 短文件完整传输 */
 static void test_128b_transfer(void)
 {
     uint8_t firmware[300];
@@ -273,12 +281,12 @@ static void test_128b_transfer(void)
         firmware[i] = (uint8_t)(i * 5 + 1);
 
     tx_header("app.bin", sizeof(firmware));
-    tx_data_packet_128(1, &firmware[0], 128);
+    tx_data_packet(1, &firmware[0], 128);
     CHECK(last_tx() == 0x06, "ACK 128B pkt1");
-    tx_data_packet_128(2, &firmware[128], 128);
+    tx_data_packet(2, &firmware[128], 128);
     CHECK(last_tx() == 0x06, "ACK 128B pkt2");
-    tx_data_packet_128(3, &firmware[256],
-                       (uint16_t)(sizeof(firmware) - 256));
+    tx_data_packet(3, &firmware[256],
+                   (uint16_t)(sizeof(firmware) - 256));
     CHECK(last_tx() == 0x06, "ACK 128B pkt3");
 
     tx_finish();
@@ -304,7 +312,8 @@ static void test_single_eot_variant(void)
         firmware[i] = (uint8_t)i;
 
     tx_header("app.bin", 200);
-    tx_data_packet(1, firmware, 200);
+    tx_data_packet(1, firmware, 128);
+    tx_data_packet(2, firmware + 128, 72);
     tx_eot();
     CHECK(last_tx() == 0x15, "NAK after EOT");
     tx_empty_header();      /* 跳过二次 EOT, 直接空包 */
@@ -319,36 +328,36 @@ static void test_single_eot_variant(void)
 /* 4. CRC 错误 -> NAK -> 重传恢复 */
 static void test_crc_error_recovery(void)
 {
-    uint8_t firmware[1500];
+    uint8_t firmware[250];
     reset_rx();
     ymodem_init(&cbs);
     ymodem_start();
 
-    for (int i = 0; i < 1500; i++)
+    for (int i = 0; i < 250; i++)
         firmware[i] = (uint8_t)(i + 1);
 
-    tx_header("app.bin", 1500);
+    tx_header("app.bin", 250);
     CHECK(tx_len >= 2 && tx_queue[tx_len - 2] == 0x06,
           "ACK header");
     CHECK(last_tx() == 0x43, "C after header");
 
-    tx_data_packet(1, firmware, 1024);
+    tx_data_packet(1, firmware, 128);
     CHECK(last_tx() == 0x06, "ACK pkt1");
 
     /* 数据字节被破坏 -> NAK */
-    tx_data_packet_corrupt(2, firmware + 1024, 476, 50);
+    tx_data_packet_corrupt(2, firmware + 128, 122, 50);
     CHECK(last_tx() == 0x15, "NAK bad pkt");
     CHECK(ymodem_state() == YMODEM_RX_DATA, "still RX_DATA after NAK");
-    CHECK(got_data_len == 1024, "bad pkt not stored");
+    CHECK(got_data_len == 128, "bad pkt not stored");
 
     /* 重传正确包 */
-    tx_data_packet(2, firmware + 1024, 476);
+    tx_data_packet(2, firmware + 128, 122);
     CHECK(last_tx() == 0x06, "ACK retransmit");
 
     tx_finish();
     CHECK(ymodem_state() == YMODEM_DONE, "DONE after recovery");
-    CHECK(got_data_len == 1500, "data len");
-    CHECK(memcmp(got_data, firmware, 1500) == 0, "data content");
+    CHECK(got_data_len == 250, "data len");
+    CHECK(memcmp(got_data, firmware, 250) == 0, "data content");
 
     printf("test_crc_error_recovery: PASS\n");
 }
@@ -356,25 +365,25 @@ static void test_crc_error_recovery(void)
 /* 5. 重复包 (ACK 丢失模拟) */
 static void test_duplicate_packet(void)
 {
-    uint8_t firmware[1300];
+    uint8_t firmware[200];
     reset_rx();
     ymodem_init(&cbs);
     ymodem_start();
 
-    for (int i = 0; i < 1300; i++)
+    for (int i = 0; i < 200; i++)
         firmware[i] = (uint8_t)(i * 3);
 
-    tx_header("app.bin", 1300);
-    tx_data_packet(1, firmware, 1024);
-    tx_data_packet(1, firmware, 1024);   /* 重复 */
+    tx_header("app.bin", 200);
+    tx_data_packet(1, firmware, 128);
+    tx_data_packet(1, firmware, 128);   /* 重复 */
     CHECK(last_tx() == 0x06, "ACK duplicate");
-    CHECK(got_data_len == 1024, "duplicate not stored");
+    CHECK(got_data_len == 128, "duplicate not stored");
 
-    tx_data_packet(2, firmware + 1024, 276);
+    tx_data_packet(2, firmware + 128, 72);
     tx_finish();
     CHECK(ymodem_state() == YMODEM_DONE, "DONE");
-    CHECK(got_data_len == 1300, "data len");
-    CHECK(memcmp(got_data, firmware, 1300) == 0, "data content");
+    CHECK(got_data_len == 200, "data len");
+    CHECK(memcmp(got_data, firmware, 200) == 0, "data content");
 
     printf("test_duplicate_packet: PASS\n");
 }
@@ -399,16 +408,16 @@ static void test_header_reject(void)
 /* 7. 数据包被拒 -> 中止 */
 static void test_data_reject(void)
 {
-    uint8_t firmware[1500];
+    uint8_t firmware[200] = {0};
     reset_rx();
     ymodem_init(&cbs);
     ymodem_start();
 
     reject_data_at = 2;
-    tx_header("app.bin", 1500);
-    tx_data_packet(1, firmware, 1024);
+    tx_header("app.bin", 200);
+    tx_data_packet(1, firmware, 128);
     CHECK(ymodem_state() == YMODEM_RX_DATA, "still RX after pkt1");
-    tx_data_packet(2, firmware + 1024, 476);
+    tx_data_packet(2, firmware + 128, 72);
     CHECK(ymodem_state() == YMODEM_ABORTED, "ABORTED on reject");
     CHECK(last_tx() == 0x18 && tx_queue[tx_len - 2] == 0x18, "CAN CAN sent");
 
@@ -475,6 +484,36 @@ static void test_data_timeout_abort(void)
     printf("test_data_timeout_abort: PASS\n");
 }
 
+/* 11. 标准 YMODEM 1K STX 数据包 */
+static void test_1k_packet_transfer(void)
+{
+    uint8_t firmware[1552];
+    int i;
+
+    reset_rx();
+    ymodem_init(&cbs);
+    ymodem_start();
+
+    for (i = 0; i < (int)sizeof(firmware); i++)
+        firmware[i] = (uint8_t)(i * 11 + 7);
+
+    tx_header("App.bin", sizeof(firmware));
+    tx_data_packet_1k(1, firmware, 1024);
+    CHECK(last_tx() == 0x06, "ACK 1K packet");
+    tx_data_packet_1k(2, firmware + 1024,
+                      (uint16_t)(sizeof(firmware) - 1024));
+    CHECK(last_tx() == 0x06, "ACK padded final 1K packet");
+
+    tx_finish();
+    CHECK(ymodem_state() == YMODEM_DONE, "1K transfer DONE");
+    CHECK(complete_called == 1, "1K complete callback");
+    CHECK(got_data_len == sizeof(firmware), "1K data length");
+    CHECK(memcmp(got_data, firmware, sizeof(firmware)) == 0,
+          "1K data content");
+
+    printf("test_1k_packet_transfer: PASS (%u bytes)\n", got_data_len);
+}
+
 int main(void)
 {
     test_crc16_check();
@@ -488,6 +527,7 @@ int main(void)
     test_sender_can();
     test_c_resend();
     test_data_timeout_abort();
+    test_1k_packet_transfer();
 
     if (test_failed)
     {

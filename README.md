@@ -1,13 +1,13 @@
 # STM32F411 YMODEM Bootloader
 
-面向 STM32F411CEU6 的串口 Bootloader。Bootloader 通过 USART1 接收 YMODEM 固件，写入 APP 分区，保存固件元数据并跳转运行；仓库同时提供一个 LED 闪烁和长按按键重入 Bootloader 的演示 APP。
+面向 STM32F411CEU6 的串口 Bootloader。Bootloader 通过 USART1 接收 YMODEM 固件，写入 APP 分区，完成 CRC32 完整性验证并跳转运行；仓库同时提供一个 LED 闪烁演示 APP。
 
 ## 项目状态
 
 - MCU：STM32F411CEU6，512 KB Flash，128 KB SRAM
 - 外部晶振：12 MHz HSE，PLL 后系统时钟 96 MHz
 - 串口：USART1，PA9/PA10，115200-8-N-1
-- 协议：YMODEM CRC16，支持 128 B（SOH）和 1 KB（STX）数据包
+- 协议：标准 YMODEM CRC16，支持 128 B SOH 和 1 KB STX 数据包
 - 开发方式：Windows Keil MDK 或 VSCode + EIDE，均使用 ARM Compiler 5
 - Agent 验证：WSL 调用 Windows AC5 工具链
 
@@ -25,7 +25,7 @@ BootLoader/
 │   └── libraries/           CMSIS 和 STM32 StdPeriph
 ├── app/                     演示 APP 独立 Keil/EIDE 工程
 ├── docs/                    构建、设计和升级文档
-├── tests/ymodem/            Linux 主机协议单元测试
+├── tests/                   YMODEM 与启动策略主机单元测试
 ├── tools/build_check.sh     WSL 调 Windows AC5 的全量验证脚本
 └── BootLoader.code-workspace
 ```
@@ -35,10 +35,10 @@ BootLoader/
 1. 用 VSCode + EIDE 打开 `BootLoader.code-workspace`，或分别用 Keil 打开两个子工程的 `.uvprojx`。
 2. 构建 `bootloader` 工程，通过 ST-Link 烧录 Bootloader。
 3. 构建 `app` 工程，得到 `app/build/app/App.bin`。
-4. 串口工具选择 115200-8-N-1 和 YMODEM，发送 `App.bin`。
-5. 升级成功后 Bootloader 校验、保存元数据，并在 1 秒后跳转 APP。
+4. 串口工具选择 115200-8-N-1 和 `Ymodem`，发送 `App.bin`。发送器可自动选择 128 B SOH 或 1 KB STX 数据包。
+5. 升级成功后 Bootloader 校验、提交元数据，1 秒后受控复位并重新校验后启动 APP。
 
-首次启动没有有效 APP 时，Bootloader 无限等待传输；已有有效 APP 时等待 5 秒，未开始传输则跳转 APP。按住 PC13 后复位可强制进入升级模式，APP 运行时长按 PC13 约 2 秒也可请求重入。
+正常复位且 APP 有效时会立即跳转，不再开放固定的串口等待窗口。需要升级时按住 PC13 后上电或复位，并保持约 100 ms；没有有效 APP 时会自动进入恢复升级模式。APP 也可调用 `Boot_RequestBootloader()` 请求软件重入。
 
 ## 文档
 
@@ -51,6 +51,7 @@ BootLoader/
 ```bash
 bash tools/build_check.sh
 make -C tests/ymodem test
+make -C tests/boot_policy test
 ```
 
 全量构建必须保证 Bootloader 小于 16 KB。构建和测试输出均被 Git 忽略。
