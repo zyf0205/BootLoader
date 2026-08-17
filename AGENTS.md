@@ -7,6 +7,7 @@ STM32F411CEU6 串口 Bootloader(YMODEM 协议),包含两个**自包含独立工�
 - `app/` - APP 演示工程 (EIDE, 链接地址 0x08004000, LED + 长按重入 BL)
 
 每个工程自带 `libraries/`(CMSIS + StdPeriph 全量)与 `modules/`(board/led/key/systick/bootapi),互不依赖。
+开发板使用 12MHz HSE,两个工程均配置为 96MHz SYSCLK。
 
 ## 编译验证 (本机环境: WSL + Windows Keil AC5)
 
@@ -56,3 +57,4 @@ cd tests/ymodem && make test
 
 用户使用 VSCode + EIDE 插件打开 `BootLoader.code-workspace` 构建烧录。
 修改 `.eide/eide.yml` 后需同步更新 `tools/build_check.sh` 的源文件列表。
+EIDE 配置是唯一 IDE 工程源。不要生成或提交 `.uvprojx`、子工程 workspace、`.cmsis/`、RTE 或模板工程；Agent 使用 `tools/build_check.sh` 调用 Windows AC5 验证。
