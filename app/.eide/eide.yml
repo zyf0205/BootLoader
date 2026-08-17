@@ -13,10 +13,6 @@ virtualFolder:
         - path: core/main.c
         - path: core/stm32f4xx_it.c
       folders: []
-    - name: Config
-      files:
-        - path: config/flash_config.h
-      folders: []
     - name: Modules
       files:
         - path: modules/led/led.c
@@ -55,6 +51,8 @@ targets:
         - libraries/cmsis/inc
         - libraries/cmsis/system
         - libraries/stdperiph/inc
+        - .cmsis/include
+        - RTE/_app
       libList: []
     excludeList: []
     settings:
@@ -67,12 +65,9 @@ targets:
         floatingPointHardware: single
         options:
           version: 4
-          afterBuildTasks:
-            - name: "[Generate bin]"
-              abortAfterFailed: true
-              command: fromelf --bin build/app/app.axf --output build/app/App.bin
-              disable: false
-          asm-compiler: {}
+          afterBuildTasks: []
+          asm-compiler:
+            defines: []
           beforeBuildTasks: []
           c/cpp-compiler:
             CXX_FLAGS: --diag_suppress=1 --diag_suppress=1295
@@ -85,8 +80,7 @@ targets:
             output-debug-info: enable
             use-microLIB: true
           linker:
-            $outputTaskExcludes:
-              - .bin
+            $outputTaskExcludes: []
             output-format: elf
             ro-base: "0x08004000"
             rw-base: "0x20000000"
@@ -95,19 +89,75 @@ targets:
         storageLayout:
           RAM:
             - id: 1
+              isChecked: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              noInit: false
+              tag: RAM
+            - id: 2
+              isChecked: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              noInit: false
+              tag: RAM
+            - id: 3
+              isChecked: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              noInit: false
+              tag: RAM
+            - id: 1
               isChecked: true
               mem:
                 size: "0x20000"
                 startAddr: "0x20000000"
               noInit: false
               tag: IRAM
+            - id: 2
+              isChecked: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              noInit: false
+              tag: IRAM
           ROM:
+            - id: 1
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: ROM
+            - id: 2
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: ROM
+            - id: 3
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: ROM
             - id: 1
               isChecked: true
               isStartup: true
               mem:
-                size: "0x3C000"
-                startAddr: "0x8004000"
+                size: "0x0003C000"
+                startAddr: "0x08004000"
+              tag: IROM
+            - id: 2
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
               tag: IROM
         useCustomScatterFile: false
     uploadConfigMap:
@@ -121,7 +171,7 @@ targets:
         proType: 1
         speed: 8000
       STLink:
-        address: "0x8004000"
+        address: "0x08004000"
         bin: ""
         elFile: None
         optionBytes: .eide/app.st.option.bytes.ini

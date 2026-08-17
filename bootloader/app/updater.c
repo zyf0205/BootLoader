@@ -18,7 +18,6 @@ static uint32_t s_done_tick    = 0;
 static uint32_t s_fw_size     = 0;
 static uint32_t s_write_addr  = 0;
 static uint16_t s_fw_version  = 0;
-static uint8_t  s_need_erase  = 0;   /* 首个数据包到达前先擦除 APP 区 */
 
 /* ======================== 辅助函数 ======================== */
 
@@ -72,6 +71,25 @@ static uint16_t ParseVersion(const char *name)
     return 0;
 }
 
+static uint8_t IsHexFile(const char *name)
+{
+    const char *p = name;
+    const char *ext = NULL;
+
+    while (*p)
+    {
+        if (*p == '.')
+            ext = p + 1;
+        p++;
+    }
+
+    return ext != NULL &&
+           (ext[0] == 'h' || ext[0] == 'H') &&
+           (ext[1] == 'e' || ext[1] == 'E') &&
+           (ext[2] == 'x' || ext[2] == 'X') &&
+           ext[3] == '\0';
+}
+
 /* 发送回调: 等待 TX 空闲后发送 (协议为同步请求-应答, 阻塞可接受) */
 static int YmodemSend(const uint8_t *data, uint16_t len)
 {
@@ -87,6 +105,12 @@ static int OnHeader(const char *name, uint32_t size)
 {
     const char *base = BaseName(name);
 
+    if (IsHexFile(base))
+    {
+        printf("\r\nError: HEX files are not supported. Send App.bin.\r\n");
+        return -1;
+    }
+
     /* 大小检查 */
     if (size == 0 || size > APP_SIZE)
     {
@@ -98,7 +122,6 @@ static int OnHeader(const char *name, uint32_t size)
     s_fw_size    = size;
     s_write_addr = APP_ADDR;
     s_fw_version = ParseVersion(base);
-    s_need_erase = 1;
 
     printf("\r\nFile   : %s\r\n", base);
     printf("Size   : %lu bytes\r\n", (unsigned long)size);
@@ -106,6 +129,21 @@ static int OnHeader(const char *name, uint32_t size)
         printf("Version: v%d.%d\r\n", s_fw_version >> 8, s_fw_version & 0xFF);
 
     Led_Set(LED_BLINK_FAST);
+    return 0;
+}
+
+static int OnPrepare(void)
+{
+    flash_err_t err;
+
+    printf("Erasing APP region...");
+    err = Flash_EraseApp();
+    if (err != FLASH_OK)
+    {
+        printf("FAILED\r\n");
+        return -1;
+    }
+    printf("OK\r\n\r\nReceiving ");
     return 0;
 }
 
@@ -121,23 +159,6 @@ static int OnData(const uint8_t *data, uint16_t len)
     {
         /* 数据已收满, 忽略多余的填充包 */
         return 0;
-    }
-
-    /* 懒擦除: 首个数据包到达时才擦除 APP 区。
-     * 擦除耗时数秒, 若在文件头回调中执行, 发送端可能在等待
-     * 文件头 ACK 时超时重发, 导致流程混乱; 放在这里后,
-     * 即使发送端重发数据包, 也会被当作重复包正常处理。 */
-    if (s_need_erase)
-    {
-        printf("Erasing APP region...");
-        err = Flash_EraseApp();
-        if (err != FLASH_OK)
-        {
-            printf("FAILED\r\n");
-            return -1;
-        }
-        printf("OK\r\n\r\nReceiving ");
-        s_need_erase = 0;
     }
 
     if (s_write_addr + write_len > APP_END_ADDR)
@@ -168,8 +189,8 @@ static void Restart(void)
 {
     Led_Set(LED_BLINK_SLOW);
     printf("\r\nRestarting receiver, waiting for YMODEM...\r\n");
-    s_need_erase = 0;
     ymodem_stop();
+    Usart_FlushRx();   /* 丢弃残留脏数据, 避免污染新会话 (如 0x18 误判中止) */
     ymodem_start();
     s_state = UPDATER_WAITING;
 }
@@ -225,6 +246,7 @@ void Updater_Init(void)
     static const ymodem_callbacks_t callbacks = {
         .send        = YmodemSend,
         .on_header   = OnHeader,
+        .on_prepare  = OnPrepare,
         .on_data     = OnData,
         .on_complete = NULL,    /* 完成逻辑在 Updater_Process 中处理 */
         .on_abort    = OnAbort,
@@ -240,6 +262,7 @@ void Updater_Begin(uint32_t window_ms)
     s_window_start = Systick_GetTick();
     s_state        = UPDATER_WAITING;
 
+    Usart_FlushRx();   /* 丢弃上电/上次会话残留的 RX 脏数据 */
     ymodem_start();
 }
 

@@ -27,6 +27,9 @@ typedef struct {
     /* 收到文件头: 返回 0 接受传输, 非 0 拒绝 (自动发送 CAN CAN 中止) */
     int  (*on_header)(const char *name, uint32_t size);
 
+    /* 文件头 ACK 后、请求首个数据包前执行耗时准备操作 */
+    int  (*on_prepare)(void);
+
     /* 收到数据包: 返回 0 接受, 非 0 拒绝 (自动中止传输) */
     int  (*on_data)(const uint8_t *data, uint16_t len);
 

@@ -5,7 +5,7 @@
 #include "boot_api.h"
 #include "flash_config.h"
 
-#define LED_BLINK_INTERVAL_MS  500     /* LED 闪烁周期 */
+#define LED_BLINK_INTERVAL_MS  1500    /* APP 慢闪: 每 1.5 秒翻转一次 */
 #define KEY_HOLD_ENTER_BL_MS   2000    /* 长按进入 Bootloader 时间 */
 
 /* 1ms 定时回调: 驱动按键消抖 */

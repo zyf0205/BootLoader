@@ -48,6 +48,11 @@ static int cb_on_header(const char *name, uint32_t size)
     return 0;
 }
 
+static int cb_on_prepare(void)
+{
+    return 0;
+}
+
 static int data_pkt_cnt = 0;
 
 /* 与真实 updater 一致: 只写入文件大小以内的数据 (忽略末包填充) */
@@ -83,6 +88,7 @@ static void cb_on_abort(const char *reason)
 static const ymodem_callbacks_t cbs = {
     .send        = cb_send,
     .on_header   = cb_on_header,
+    .on_prepare  = cb_on_prepare,
     .on_data     = cb_on_data,
     .on_complete = cb_on_complete,
     .on_abort    = cb_on_abort,
@@ -125,6 +131,14 @@ static void tx_data_packet(uint8_t seq, const uint8_t *data, uint16_t len)
     memset(buf, 0x1A, sizeof(buf));
     memcpy(buf, data, len);
     tx_raw_packet(0x02, seq, buf, 1024, 0xFFFF);   /* STX 1K 包 */
+}
+
+static void tx_data_packet_128(uint8_t seq, const uint8_t *data, uint16_t len)
+{
+    uint8_t buf[128];
+    memset(buf, 0x1A, sizeof(buf));
+    memcpy(buf, data, len);
+    tx_raw_packet(0x01, seq, buf, 128, 0xFFFF);    /* SOH 128 字节包 */
 }
 
 static void tx_data_packet_corrupt(uint8_t seq, const uint8_t *data,
@@ -204,7 +218,9 @@ static void test_full_transfer(void)
     CHECK(last_tx() == 0x43, "first response should be 'C'");
 
     tx_header("led_v1.2.bin", sizeof(firmware));
-    CHECK(last_tx() == 0x06, "ACK after header");
+    CHECK(tx_len >= 2 && tx_queue[tx_len - 2] == 0x06,
+          "ACK after header");
+    CHECK(last_tx() == 0x43, "C before first data packet");
     CHECK(ymodem_state() == YMODEM_RX_DATA, "state RX_DATA after header");
     CHECK(strcmp(got_name, "led_v1.2.bin") == 0, "name parsed");
     CHECK(got_size == sizeof(firmware), "size parsed");
@@ -222,12 +238,20 @@ static void test_full_transfer(void)
     CHECK(last_tx() == 0x15, "NAK after first EOT");
 
     tx_eot();
-    CHECK(last_tx() == 0x06, "ACK after second EOT");
+    CHECK(tx_len >= 2 && tx_queue[tx_len - 2] == 0x06,
+          "ACK after second EOT");
+    CHECK(last_tx() == 0x43, "C requests final empty header");
 
     tx_empty_header();
     CHECK(last_tx() == 0x06, "ACK after empty header");
     CHECK(ymodem_state() == YMODEM_DONE, "state DONE");
     CHECK(complete_called == 1, "complete callback");
+
+    rx_reset();
+    tx_empty_header();
+    CHECK(last_tx() == 0x06, "ACK repeated empty header in DONE");
+    CHECK(ymodem_state() == YMODEM_DONE, "stay DONE after repeated empty header");
+    CHECK(complete_called == 1, "complete callback not repeated");
 
     CHECK(got_data_len == sizeof(firmware), "data length");
     CHECK(memcmp(got_data, firmware, sizeof(firmware)) == 0, "data content");
@@ -235,7 +259,40 @@ static void test_full_transfer(void)
     printf("test_full_transfer: PASS (%u bytes, %d pkts)\n", got_data_len, data_pkt_cnt);
 }
 
-/* 3. 单次 EOT + 直接空包 (兼容变体) */
+/* 3. 不使用 1K 包的完整传输 (纯 SOH 128 字节数据包) */
+static void test_128b_transfer(void)
+{
+    uint8_t firmware[300];
+    int i;
+
+    reset_rx();
+    ymodem_init(&cbs);
+    ymodem_start();
+
+    for (i = 0; i < (int)sizeof(firmware); i++)
+        firmware[i] = (uint8_t)(i * 5 + 1);
+
+    tx_header("app.bin", sizeof(firmware));
+    tx_data_packet_128(1, &firmware[0], 128);
+    CHECK(last_tx() == 0x06, "ACK 128B pkt1");
+    tx_data_packet_128(2, &firmware[128], 128);
+    CHECK(last_tx() == 0x06, "ACK 128B pkt2");
+    tx_data_packet_128(3, &firmware[256],
+                       (uint16_t)(sizeof(firmware) - 256));
+    CHECK(last_tx() == 0x06, "ACK 128B pkt3");
+
+    tx_finish();
+    CHECK(ymodem_state() == YMODEM_DONE, "128B transfer DONE");
+    CHECK(complete_called == 1, "128B complete callback");
+    CHECK(got_data_len == sizeof(firmware), "128B data length");
+    CHECK(memcmp(got_data, firmware, sizeof(firmware)) == 0,
+          "128B data content");
+
+    printf("test_128b_transfer: PASS (%u bytes, %d pkts)\n",
+           got_data_len, data_pkt_cnt);
+}
+
+/* 4. 单次 EOT + 直接空包 (兼容变体) */
 static void test_single_eot_variant(void)
 {
     uint8_t firmware[200];
@@ -271,7 +328,9 @@ static void test_crc_error_recovery(void)
         firmware[i] = (uint8_t)(i + 1);
 
     tx_header("app.bin", 1500);
-    CHECK(last_tx() == 0x06, "ACK header");
+    CHECK(tx_len >= 2 && tx_queue[tx_len - 2] == 0x06,
+          "ACK header");
+    CHECK(last_tx() == 0x43, "C after header");
 
     tx_data_packet(1, firmware, 1024);
     CHECK(last_tx() == 0x06, "ACK pkt1");
@@ -420,6 +479,7 @@ int main(void)
 {
     test_crc16_check();
     test_full_transfer();
+    test_128b_transfer();
     test_single_eot_variant();
     test_crc_error_recovery();
     test_duplicate_packet();

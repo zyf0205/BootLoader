@@ -23,7 +23,7 @@ static void PrintBanner(void)
 {
     printf("\r\n============================================\r\n");
     printf("  STM32F411 Bootloader v%s\r\n", BL_VERSION_STR);
-    printf("  Protocol : YMODEM (CRC16, 1K packet)\r\n");
+    printf("  Protocol : YMODEM (CRC16, 128B/1K packet)\r\n");
     printf("  Build    : %s %s\r\n", __DATE__, __TIME__);
     printf("============================================\r\n");
 }

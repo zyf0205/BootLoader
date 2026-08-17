@@ -132,6 +132,15 @@ static void HandleHeader(const uint8_t *data)
     s_wait_end_hdr   = 0;
     s_state          = YMODEM_RX_DATA;
     SendAck();
+
+    /* Standard YMODEM waits for a second 'C' after the header ACK. This
+     * gives the receiver time to erase Flash before packet 1 is sent. */
+    if (s_cb->on_prepare && s_cb->on_prepare() != 0)
+    {
+        DoAbort("receiver prepare failed");
+        return;
+    }
+    SendC();
 }
 
 static void HandleData(const uint8_t *data)
@@ -185,13 +194,17 @@ static void HandlePacket(void)
         {
             HandleHeader(data);
         }
-        else if (s_state == YMODEM_WAIT_EOT && data[0] == '\0')
+        else if ((s_state == YMODEM_WAIT_EOT || s_state == YMODEM_DONE) &&
+                 data[0] == '\0')
         {
-            /* 结束空包 (兼容跳过二次 EOT 的发送端) */
+            /* 最终 ACK 丢失时发送端会重发结束空包, 继续 ACK。 */
             SendAck();
-            s_state = YMODEM_DONE;
-            if (s_cb->on_complete)
-                s_cb->on_complete();
+            if (s_state != YMODEM_DONE)
+            {
+                s_state = YMODEM_DONE;
+                if (s_cb->on_complete)
+                    s_cb->on_complete();
+            }
         }
         else
         {
@@ -219,9 +232,10 @@ static void HandleEot(void)
     }
     else if (s_state == YMODEM_WAIT_EOT && !s_wait_end_hdr)
     {
-        /* 二次 EOT: ACK, 等待结束空包 */
+        /* 二次 EOT: ACK + 'C', 请求发送端发结束空包 */
         SendAck();
         s_wait_end_hdr = 1;
+        SendC();
     }
     else
     {
@@ -260,9 +274,7 @@ void ymodem_stop(void)
 
 void ymodem_feed(uint8_t byte)
 {
-    if (s_state == YMODEM_IDLE ||
-        s_state == YMODEM_DONE ||
-        s_state == YMODEM_ABORTED)
+    if (s_state == YMODEM_IDLE || s_state == YMODEM_ABORTED)
         return;
 
     if (s_pkt_idx == 0)

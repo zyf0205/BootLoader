@@ -48,13 +48,9 @@ void Boot_JumpToApp(void)
 {
     uint32_t msp;
     uint32_t reset;
+    uint32_t i;
 
-    /* 1. 关闭外设与全局中断, 还给 APP 一个干净的环境 */
-    __disable_irq();
-    Usart_DeInit();
-    SysTick->CTRL = 0;
-
-    /* 2. 校验 APP 向量表 (无效则返回, 由主循环处理) */
+    /* 1. 校验 APP 向量表, 避免校验失败后留下已关闭的外设/中断。 */
     msp   = *(volatile uint32_t *)APP_ADDR;
     reset = *(volatile uint32_t *)(APP_ADDR + 4);
 
@@ -63,13 +59,29 @@ void Boot_JumpToApp(void)
     if (reset < APP_ADDR || reset >= APP_END_ADDR || (reset & 1) == 0)
         return;
 
-    /* 3. 复位时钟树, APP 的 SystemInit 会重新配置 */
+    /* 2. 等日志发送完成后关闭外设, 还给 APP 一个干净的环境。 */
+    Usart_WaitTxIdle();
+    __disable_irq();
+    Usart_DeInit();
+    SysTick->CTRL = 0;
+    SysTick->LOAD = 0;
+    SysTick->VAL  = 0;
+
+    for (i = 0; i < 8; i++)
+    {
+        NVIC->ICER[i] = 0xFFFFFFFFU;
+        NVIC->ICPR[i] = 0xFFFFFFFFU;
+    }
+
+    /* 3. 复位时钟树, APP 的 SystemInit 会重新配置。 */
     RCC_DeInit();
 
-    /* 4. 重定向向量表并跳转 */
+    /* 4. 重定向向量表并跳转。Reset_Handler 应在中断开启状态运行。 */
     SCB->VTOR = APP_ADDR;
     __set_MSP(msp);
     __set_CONTROL(0);       /* 线程模式 + MSP (清空 PSP 使用标志) */
+    __enable_irq();
+    __DSB();
     __ISB();
 
     ((void (*)(void))reset)();

@@ -52,6 +52,9 @@ tests/ymodem/test_ymodem
 # ---- EIDE 依赖缓存 ----
 .eide/.de/
 .eide/.usr/
+.cmsis/
+RTE/
+OBJ/
 
 # ---- STLink 选项字节 (烧录时生成) ----
 *.st.option.bytes.ini

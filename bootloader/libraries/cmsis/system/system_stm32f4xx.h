@@ -11,17 +11,17 @@
  *
  * 时钟源可通过 CLOCK_USE_HSE 选择:
  *   0: HSI 16MHz -> PLL(M=16, N=192, P=2) = 96MHz  (默认, 无需晶振)
- *   1: HSE 25MHz -> PLL(M=25, N=192, P=2) = 96MHz
+ *   1: HSE 12MHz -> PLL(M=12, N=192, P=2) = 96MHz  (按实际晶振改 PLL_M)
  * ================================================================== */
 
 #include <stdint.h>
 
 /* 时钟源选择 */
-#define CLOCK_USE_HSE   0
+#define CLOCK_USE_HSE   1
 
 #if CLOCK_USE_HSE
 #define PLL_SOURCE_HSE  1
-#define PLL_M           25
+#define PLL_M           12
 #else
 #define PLL_SOURCE_HSE  0
 #define PLL_M           16
