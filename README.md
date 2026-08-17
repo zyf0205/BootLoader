@@ -8,14 +8,14 @@
 - 外部晶振：12 MHz HSE，PLL 后系统时钟 96 MHz
 - 串口：USART1，PA9/PA10，115200-8-N-1
 - 协议：YMODEM CRC16，支持 128 B（SOH）和 1 KB（STX）数据包
-- 开发方式：Windows VSCode + EIDE + Keil MDK ARM Compiler 5
+- 开发方式：Windows Keil MDK 或 VSCode + EIDE，均使用 ARM Compiler 5
 - Agent 验证：WSL 调用 Windows AC5 工具链
 
 ## 目录
 
 ```text
 BootLoader/
-├── bootloader/              Bootloader 独立 EIDE 工程
+├── bootloader/              Bootloader 独立 Keil/EIDE 工程
 │   ├── app/                 启动决策和升级流程
 │   ├── config/              分区、超时和版本配置
 │   ├── core/                main 和异常处理
@@ -23,7 +23,7 @@ BootLoader/
 │   ├── protocols/ymodem/    平台无关 YMODEM 接收状态机
 │   ├── modules/             board、LED、按键、SysTick、Boot API
 │   └── libraries/           CMSIS 和 STM32 StdPeriph
-├── app/                     演示 APP 独立 EIDE 工程
+├── app/                     演示 APP 独立 Keil/EIDE 工程
 ├── docs/                    构建、设计和升级文档
 ├── tests/ymodem/            Linux 主机协议单元测试
 ├── tools/build_check.sh     WSL 调 Windows AC5 的全量验证脚本
@@ -32,9 +32,9 @@ BootLoader/
 
 ## 快速开始
 
-1. 在 Windows VSCode 中打开 `BootLoader.code-workspace`，安装 EIDE 插件。
-2. 构建 `bootloader` 目标，通过 ST-Link 烧录 Bootloader。
-3. 构建 `app` 目标，得到 `app/build/app/App.bin`。
+1. 用 VSCode + EIDE 打开 `BootLoader.code-workspace`，或分别用 Keil 打开两个子工程的 `.uvprojx`。
+2. 构建 `bootloader` 工程，通过 ST-Link 烧录 Bootloader。
+3. 构建 `app` 工程，得到 `app/build/app/App.bin`。
 4. 串口工具选择 115200-8-N-1 和 YMODEM，发送 `App.bin`。
 5. 升级成功后 Bootloader 校验、保存元数据，并在 1 秒后跳转 APP。
 
