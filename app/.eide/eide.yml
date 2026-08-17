@@ -65,7 +65,11 @@ targets:
         floatingPointHardware: single
         options:
           version: 4
-          afterBuildTasks: []
+          afterBuildTasks:
+            - name: "[Generate App.bin]"
+              abortAfterFailed: true
+              command: fromelf.exe --bin "${OutDir}\${ProjectName}.axf" --output "${OutDir}\App.bin"
+              disable: false
           asm-compiler:
             defines: []
           beforeBuildTasks: []
@@ -80,7 +84,8 @@ targets:
             output-debug-info: enable
             use-microLIB: true
           linker:
-            $outputTaskExcludes: []
+            $outputTaskExcludes:
+              - .bin
             output-format: elf
             ro-base: "0x08004000"
             rw-base: "0x20000000"
