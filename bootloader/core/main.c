@@ -53,6 +53,7 @@ int main(void)
     uint8_t post_update;
     uint8_t key_held;
     uint8_t app_valid;
+    uint32_t fault_resets;
 
     /* ---- 1. 硬件初始化 ---- */
     Systick_Init();
@@ -65,15 +66,26 @@ int main(void)
     PrintBanner();
 
     /* ---- 2. 确定性启动决策 ---- */
+    fault_resets = Boot_PeekFaultResets();
     post_update   = Boot_TakePostUpdate();
     app_requested = Boot_TakeAppRequest();
     key_held      = (app_requested || post_update) ? 0 : Boot_IsUpdateKeyHeld();
     app_valid     = (app_requested || key_held) ? 0 : Flash_IsAppValid();
     reason        = BootPolicy_Select(app_requested, key_held, app_valid);
 
+    /* HardFault 复位循环保护: 连续多次异常复位后不再自动跳 APP,
+     * 停在升级模式等待修复 (升级入口本身即逃生通道) */
+    if (fault_resets >= BOOT_FAULT_LIMIT)
+    {
+        printf("\r\nWarning: %lu HardFault resets detected, stay in recovery.\r\n",
+               (unsigned long)fault_resets);
+        reason = BOOT_REASON_INVALID_APP;
+    }
+
     if (reason == BOOT_REASON_NORMAL)
     {
         printf("\r\nAPP verified. Jumping...\r\n");
+        Boot_ClearFaultResets();
         Boot_JumpToApp();
         printf("APP jump failed. Enter recovery mode.\r\n");
     }
@@ -96,6 +108,7 @@ int main(void)
 
     printf("Waiting for YMODEM (send App.bin)...\r\n\r\n");
     Led_Set(LED_BLINK_SLOW);
+    Boot_ClearFaultResets();    /* 已稳定进入升级模式, 清除 Fault 计数 */
     Updater_Begin(0);
 
     /* ---- 3. 升级主循环 (完成后自动跳转 APP) ---- */

@@ -26,6 +26,9 @@ uint8_t Usart_ReadByte(uint8_t *byte);
 /* 清空接收缓冲 */
 void Usart_FlushRx(void);
 
+/* 读取并清除 RX 溢出标志: 1 = DMA 覆盖过未读数据, 缓冲不可信 */
+uint8_t Usart_TakeRxOverflow(void);
+
 /* 等待 TX 完成 (跳转 APP 前调用) */
 void Usart_WaitTxIdle(void);
 

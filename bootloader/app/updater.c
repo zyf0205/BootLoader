@@ -5,6 +5,7 @@
 #include "led.h"
 #include "systick.h"
 #include "boot.h"
+#include "boot_policy.h"
 #include "boot_config.h"
 #include <stdio.h>
 
@@ -105,6 +106,8 @@ static int YmodemSend(const uint8_t *data, uint16_t len)
 static int OnHeader(const char *name, uint32_t size)
 {
     const char *base = BaseName(name);
+    uint16_t   incoming_ver;
+    fw_meta_t  meta;
 
     if (IsHexFile(base))
     {
@@ -120,9 +123,21 @@ static int OnHeader(const char *name, uint32_t size)
         return -1;
     }
 
+    /* 防降级: 当前 APP 完好时拒绝更旧版本 (此时元数据尚未失效)。
+     * APP 无效 (recovery) 时 BootPolicy 放行, 保证旧版本可救砖 */
+    incoming_ver = ParseVersion(base);
+    if (Flash_LoadMeta(&meta) &&
+        !BootPolicy_AllowUpgrade(1, meta.version, incoming_ver))
+    {
+        printf("\r\nError: downgrade rejected (installed v%u.%u, incoming v%u.%u).\r\n",
+               meta.version >> 8, meta.version & 0xFF,
+               incoming_ver >> 8, incoming_ver & 0xFF);
+        return -1;
+    }
+
     s_fw_size    = size;
     s_write_addr = APP_ADDR;
-    s_fw_version = ParseVersion(base);
+    s_fw_version = incoming_ver;
 
     printf("\r\nFile   : %s\r\n", base);
     printf("Size   : %lu bytes\r\n", (unsigned long)size);
@@ -222,9 +237,9 @@ static void Finalize(void)
         return;
     }
 
-    printf("Verifying CRC32...");
+    printf("Calculating CRC32...");
     crc = Flash_CalcAppCrc32(s_fw_size);
-    printf("OK (0x%08lX)\r\n", (unsigned long)crc);
+    printf("done (0x%08lX)\r\n", (unsigned long)crc);
 
     printf("Saving metadata...");
     meta.magic    = META_MAGIC;
@@ -278,6 +293,15 @@ void Updater_Begin(uint32_t window_ms)
 
 void Updater_Process(void)
 {
+    /* 0. RX 缓冲溢出检测: DMA 已覆盖未读数据 (如发送端不等 'C'
+     *    在擦除期间硬冲), 缓冲内容不可信, 重启接收会话 */
+    if (Usart_TakeRxOverflow())
+    {
+        printf("\r\nRX buffer overflow, restarting receiver...\r\n");
+        Restart();
+        return;
+    }
+
     /* 1. 灌入串口数据 */
     while (Usart_RxAvailable() > 0)
     {
@@ -319,6 +343,14 @@ void Updater_Process(void)
         break;
 
     case UPDATER_TIMEOUT:
+        /* 窗口超时: 尝试启动已验证的 APP; 跳不过去则复位重来,
+         * 不再停在死状态空转 (当前窗口为无限等待, 此为防御路径) */
+        printf("\r\nUpdate window timeout.\r\n");
+        if (Flash_IsAppValid())
+            Boot_JumpToApp();
+        NVIC_SystemReset();
+        break;
+
     default:
         break;
     }

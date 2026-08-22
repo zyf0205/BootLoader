@@ -19,6 +19,8 @@
 /* ---- RX 环形缓冲 ---- */
 static uint8_t  s_rx_buf[USART_RX_BUF_SIZE];
 static uint16_t s_rx_read_pos = 0;      /* 消费位置 (仅主循环访问) */
+static uint16_t s_rx_last_write = 0;    /* 上次轮询时的写位置 (溢出检测) */
+static uint8_t  s_rx_overflow = 0;      /* DMA 覆盖未读数据标志 */
 
 /* ---- TX DMA 缓冲 ---- */
 static uint8_t s_tx_buf[USART_TX_BUF_SIZE];
@@ -104,8 +106,10 @@ void Usart_Init(void)
     /* 6. 使能串口 */
     USART_Cmd(CONSOLE_USART, ENABLE);
 
-    s_rx_read_pos = 0;
-    s_tx_active   = 0;
+    s_rx_read_pos  = 0;
+    s_rx_last_write = 0;
+    s_rx_overflow  = 0;
+    s_tx_active    = 0;
 }
 
 uint8_t Usart_Send(const uint8_t *buf, uint16_t len)
@@ -156,12 +160,20 @@ uint8_t Usart_Send(const uint8_t *buf, uint16_t len)
 
 void Usart_Putc(uint8_t ch)
 {
-    /* 与 DMA TX 互斥, 避免争用发送器 */
+    uint32_t start;
+
+    /* 与 DMA TX 互斥, 避免争用发送器; 卡死时超时放弃 */
+    start = Systick_GetTick();
     while (s_tx_active)
     {
+        if ((Systick_GetTick() - start) >= TX_DRAIN_TIMEOUT_MS)
+            break;
     }
+    start = Systick_GetTick();
     while (USART_GetFlagStatus(CONSOLE_USART, USART_FLAG_TXE) == RESET)
     {
+        if ((Systick_GetTick() - start) >= TX_DRAIN_TIMEOUT_MS)
+            return;   /* 发送器无响应, 丢弃该字节避免挂死 */
     }
     USART_SendData(CONSOLE_USART, ch);
 }
@@ -169,7 +181,22 @@ void Usart_Putc(uint8_t ch)
 uint16_t Usart_RxAvailable(void)
 {
     uint16_t write_pos = Usart_RxWritePos();
-    return (uint16_t)((write_pos - s_rx_read_pos + USART_RX_BUF_SIZE) % USART_RX_BUF_SIZE);
+    uint16_t new_bytes = (uint16_t)((write_pos - s_rx_last_write + USART_RX_BUF_SIZE) %
+                                    USART_RX_BUF_SIZE);
+
+    if (new_bytes != 0)
+    {
+        /* 本次新写入的字节数超过了剩余空闲空间, 说明 DMA 环形
+         * 回卷已覆盖未读数据, 缓冲内容不可信 */
+        uint16_t free_space = (uint16_t)(USART_RX_BUF_SIZE - 1 -
+            ((s_rx_last_write - s_rx_read_pos + USART_RX_BUF_SIZE) %
+             USART_RX_BUF_SIZE));
+        if (new_bytes > free_space)
+            s_rx_overflow = 1;
+        s_rx_last_write = write_pos;
+    }
+    return (uint16_t)((write_pos - s_rx_read_pos + USART_RX_BUF_SIZE) %
+                      USART_RX_BUF_SIZE);
 }
 
 uint8_t Usart_ReadByte(uint8_t *byte)
@@ -184,7 +211,15 @@ uint8_t Usart_ReadByte(uint8_t *byte)
 
 void Usart_FlushRx(void)
 {
-    s_rx_read_pos = Usart_RxWritePos();
+    s_rx_read_pos   = Usart_RxWritePos();
+    s_rx_last_write = s_rx_read_pos;
+}
+
+uint8_t Usart_TakeRxOverflow(void)
+{
+    uint8_t overflow = s_rx_overflow;
+    s_rx_overflow = 0;
+    return overflow;
 }
 
 void Usart_WaitTxIdle(void)
