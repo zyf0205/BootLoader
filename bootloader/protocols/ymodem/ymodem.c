@@ -16,9 +16,10 @@
 #define YM_MAX_PKT_SIZE   (YM_PKT_1K_SIZE + 5)   /* STX+SEQ+~SEQ+DATA+CRC2 */
 
 /* ---- 时序参数 ---- */
-#define YM_HEADER_RETRY_MS  1000   /* 'C' 重发间隔 (无上限, 由上层决定何时放弃) */
-#define YM_PKT_TIMEOUT_MS   3000   /* 等待数据包超时 */
-#define YM_MAX_ERRORS       5      /* 连续错误/超时次数上限 */
+#define YM_HEADER_RETRY_MS     1000   /* 'C' 重发间隔 (无上限, 由上层决定何时放弃) */
+#define YM_PKT_TIMEOUT_MS      3000   /* 等待数据包超时 */
+#define YM_INTERBYTE_TIMEOUT_MS 1000  /* 帧内超时: 半包滞留判定 */
+#define YM_MAX_ERRORS          5      /* 连续错误/超时次数上限 */
 
 /* ======================== 内部状态 ======================== */
 
@@ -37,6 +38,7 @@ static uint8_t  s_expected_seq = 1;
 static uint8_t  s_error_cnt = 0;
 static uint32_t s_tick_ms = 0;
 static uint32_t s_last_resp_tick = 0;
+static uint32_t s_last_byte_tick = 0;   /* 最近一次收到字节的时刻 (帧内超时用) */
 static uint8_t  s_last_resp = YM_C;
 
 /* ======================== 发送辅助 ======================== */
@@ -86,6 +88,22 @@ static void DoAbort(const char *reason)
 
 static void OnPacketError(void)
 {
+    /* 包已校验失败时, 检查原始字节流是否含 CAN CAN:
+     * 发送端在包中途按了取消, 剩余字节不足以组成完整包,
+     * 与其重传 5 次超时, 不如立即识别中止。合法数据包中的
+     * 0x18 0x18 字节因 CRC 校验通过不会走到这里。 */
+    uint16_t i;
+    uint16_t len = (s_pkt_idx != 0) ? s_pkt_idx : s_pkt_len;
+
+    for (i = 1; i < len; i++)
+    {
+        if (s_pkt[i - 1] == YM_CAN && s_pkt[i] == YM_CAN)
+        {
+            DoAbort("sender aborted");
+            return;
+        }
+    }
+
     if (++s_error_cnt >= YM_MAX_ERRORS)
     {
         DoAbort("too many packet errors");
@@ -99,18 +117,28 @@ static void HandleHeader(const uint8_t *data)
 {
     char     name[64];
     uint32_t size = 0;
-    uint16_t i, n;
+    uint16_t i, n, digits;
 
     for (i = 0, n = 0; i < YM_PKT_128_SIZE && data[i] != '\0' && n < sizeof(name) - 1; i++)
         name[n++] = (char)data[i];
     name[n] = '\0';
+
+    if (n >= sizeof(name) - 1 && data[n] != '\0')
+    {
+        /* 文件名占满缓冲仍未终止: 非法文件头。截断处理会把
+         * 文件名剩余字符误当作大小字段解析, 必须整包拒绝 */
+        OnPacketError();
+        return;
+    }
     i++;    /* 跳过 '\0' */
 
-    /* 大小: 十进制数字串, 以空格或 '\0' 结束 */
-    while (i < YM_PKT_128_SIZE && data[i] >= '0' && data[i] <= '9')
+    /* 大小: 十进制数字串, 以空格或 '\0' 结束。
+     * 最多取 9 位有效数字, 防止超长数字串溢出回绕绕过大小检查 */
+    for (digits = 0; i < YM_PKT_128_SIZE && data[i] >= '0' && data[i] <= '9'; i++)
     {
-        size = size * 10 + (uint32_t)(data[i] - '0');
-        i++;
+        if (digits < 9)
+            size = size * 10 + (uint32_t)(data[i] - '0');
+        digits++;
     }
 
     if (name[0] == '\0' || size == 0)
@@ -187,9 +215,10 @@ static void HandlePacket(void)
 
     s_error_cnt = 0;
 
-    if (seq == 0)
+    if (seq == 0 && s_state != YMODEM_RX_DATA)
     {
-        /* 文件头包 */
+        /* seq 0: 文件头包 / 结束空包。RX_DATA 态下的 seq 0 是
+         * 序号 255->0 自然回绕后的第 256 个数据包, 走下方数据包路径 */
         if (s_state == YMODEM_WAIT_HEADER)
         {
             HandleHeader(data);
@@ -274,8 +303,13 @@ void ymodem_stop(void)
 
 void ymodem_feed(uint8_t byte)
 {
-    if (s_state == YMODEM_IDLE || s_state == YMODEM_ABORTED)
+    /* DONE 后会话已结束, 后续杂散字节全部忽略, 避免组包产生
+     * 多余 NAK 污染链路 (成功路径由上层直接接管复位) */
+    if (s_state == YMODEM_IDLE || s_state == YMODEM_ABORTED ||
+        s_state == YMODEM_DONE)
         return;
+
+    s_last_byte_tick = s_tick_ms;
 
     if (s_pkt_idx == 0)
     {
@@ -332,9 +366,17 @@ void ymodem_tick(void)
         s_state == YMODEM_ABORTED)
         return;
 
-    /* 等待包中途不处理超时 */
+    /* 帧内超时: 发送端发出包起始后死机/拔线, 半包永久滞留。
+     * 丢弃半包并按错误处理 (要求重传), 不再永久阻塞 */
     if (s_pkt_idx != 0)
+    {
+        if ((s_tick_ms - s_last_byte_tick) >= YM_INTERBYTE_TIMEOUT_MS)
+        {
+            s_pkt_idx = 0;
+            OnPacketError();
+        }
         return;
+    }
 
     elapsed = s_tick_ms - s_last_resp_tick;
 

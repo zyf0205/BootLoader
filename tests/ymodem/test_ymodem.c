@@ -24,7 +24,7 @@ static int test_failed = 0;
 
 static char     got_name[64];
 static uint32_t got_size;
-static uint8_t  got_data[8192];
+static uint8_t  got_data[256 * 128];    /* 容纳 seq 回绕用例 (256 包 x 128B) */
 static uint32_t got_data_len;
 static int      complete_called;
 static char     abort_reason[64];
@@ -257,8 +257,8 @@ static void test_full_transfer(void)
 
     rx_reset();
     tx_empty_header();
-    CHECK(last_tx() == 0x06, "ACK repeated empty header in DONE");
-    CHECK(ymodem_state() == YMODEM_DONE, "stay DONE after repeated empty header");
+    CHECK(tx_len == 0, "bytes ignored after DONE");
+    CHECK(ymodem_state() == YMODEM_DONE, "stay DONE after stray bytes");
     CHECK(complete_called == 1, "complete callback not repeated");
 
     CHECK(got_data_len == sizeof(firmware), "data length");
@@ -514,6 +514,112 @@ static void test_1k_packet_transfer(void)
     printf("test_1k_packet_transfer: PASS (%u bytes)\n", got_data_len);
 }
 
+/* 12. seq 255->0 回绕: SOH 传输超过 255 包 (256*128 = 32768B) */
+static void test_seq_wraparound(void)
+{
+    static uint8_t firmware[256 * 128];
+    uint32_t offset;
+    uint8_t seq;
+    int i;
+
+    reset_rx();
+    ymodem_init(&cbs);
+    ymodem_start();
+
+    for (i = 0; i < (int)sizeof(firmware); i++)
+        firmware[i] = (uint8_t)(i * 13 + 5);
+
+    tx_header("wrap.bin", sizeof(firmware));
+    offset = 0;
+    seq = 1;
+    while (offset < sizeof(firmware))
+    {
+        tx_data_packet(seq++, &firmware[offset], 128);
+        CHECK(last_tx() == 0x06, "ACK data packet (incl. wrapped seq 0)");
+        offset += 128;
+    }
+    /* seq 依次为 1..255, 0 (第 256 包回绕), 1 */
+
+    tx_finish();
+    CHECK(ymodem_state() == YMODEM_DONE, "wraparound transfer DONE");
+    CHECK(got_data_len == sizeof(firmware), "wraparound full length");
+    CHECK(memcmp(got_data, firmware, sizeof(firmware)) == 0,
+          "wraparound data content");
+
+    printf("test_seq_wraparound: PASS (%u bytes, 256 pkts, seq wrapped)\n",
+           got_data_len);
+}
+
+/* 13. 帧内超时: 发送端半包死机 -> 丢弃 -> 重传恢复 */
+static void test_interbyte_timeout(void)
+{
+    uint8_t firmware[300];
+    int i;
+
+    reset_rx();
+    ymodem_init(&cbs);
+    ymodem_start();
+
+    for (i = 0; i < 300; i++)
+        firmware[i] = (uint8_t)(i * 9 + 1);
+
+    tx_header("app.bin", 300);
+    tx_data_packet(1, firmware, 128);
+
+    /* 发送端发出 SOH + 10 字节后死机静默 */
+    ymodem_feed(0x01);
+    for (i = 0; i < 10; i++)
+        ymodem_feed((uint8_t)i);
+    rx_reset();
+
+    advance_ms(999);
+    CHECK(tx_len == 0, "no response before interbyte timeout");
+    advance_ms(2);
+    CHECK(tx_len > 0 && last_tx() == 0x15, "NAK after interbyte timeout");
+    CHECK(ymodem_state() == YMODEM_RX_DATA, "still RX_DATA, half packet discarded");
+    CHECK(got_data_len == 128, "half packet not stored");
+
+    /* 发送端恢复, 重传 seq2/seq3 */
+    tx_data_packet(2, firmware + 128, 128);
+    CHECK(last_tx() == 0x06, "ACK after recovery");
+    tx_data_packet(3, firmware + 256, 44);
+    tx_finish();
+    CHECK(ymodem_state() == YMODEM_DONE, "DONE after interbyte recovery");
+    CHECK(got_data_len == 300, "data len");
+    CHECK(memcmp(got_data, firmware, 300) == 0, "data content");
+
+    printf("test_interbyte_timeout: PASS\n");
+}
+
+/* 14. 包内 CAN CAN: 发送端在数据包中途取消, 快速识别中止 */
+static void test_inpacket_can(void)
+{
+    uint8_t firmware[200] = {0};
+
+    reset_rx();
+    ymodem_init(&cbs);
+    ymodem_start();
+
+    tx_header("app.bin", 200);
+    tx_data_packet(1, firmware, 128);
+
+    /* 包中途收到 CAN CAN 后静默 */
+    ymodem_feed(0x01);            /* SOH */
+    ymodem_feed(0x02);            /* seq */
+    ymodem_feed((uint8_t)~0x02);  /* ~seq */
+    ymodem_feed(0x18);            /* CAN */
+    ymodem_feed(0x18);            /* CAN */
+    rx_reset();
+
+    advance_ms(1001);
+    CHECK(ymodem_state() == YMODEM_ABORTED, "ABORTED on in-packet CAN CAN");
+    CHECK(abort_called == 1, "abort callback");
+    CHECK(strcmp(abort_reason, "sender aborted") == 0, "abort reason");
+    CHECK(last_tx() == 0x18 && tx_queue[tx_len - 2] == 0x18, "CAN CAN sent");
+
+    printf("test_inpacket_can: PASS\n");
+}
+
 int main(void)
 {
     test_crc16_check();
@@ -528,6 +634,9 @@ int main(void)
     test_c_resend();
     test_data_timeout_abort();
     test_1k_packet_transfer();
+    test_seq_wraparound();
+    test_interbyte_timeout();
+    test_inpacket_can();
 
     if (test_failed)
     {

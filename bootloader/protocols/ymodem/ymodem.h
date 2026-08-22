@@ -17,7 +17,14 @@
  * 使用方式:
  *   1. ymodem_init() 注册回调
  *   2. ymodem_start() 开始等待文件
- *   3. 主循环: 每收到一个字节调用 ymodem_feed(), 每 1ms 调用 ymodem_tick()
+ *   3. 主循环: 每收到一个字节调用 ymodem_feed(), 每 1ms 节拍调用
+ *      ymodem_tick()
+ *
+ * 上下文契约 (v3.3):
+ *   feed 与 tick 必须在同一个主循环上下文中调用, 禁止在中断中调用。
+ *   内部无 volatile/临界区保护, 依赖单上下文串行访问; 所有回调
+ *   (含 on_abort 内的打印) 因此保证不会在中断里触发。
+ *   帧内超时: 收包中途超过 1s 无后续字节, 丢弃半包并要求重传。
  * ================================================================== */
 
 typedef struct {
@@ -60,7 +67,7 @@ void ymodem_stop(void);
 /* 喂入一个接收字节 */
 void ymodem_feed(uint8_t byte);
 
-/* 1ms 定时任务: 超时重发 */
+/* 1ms 节拍: 超时重发/帧内超时 (与 ymodem_feed 同上下文调用, 勿在中断中调用) */
 void ymodem_tick(void);
 
 /* 接收端主动中止 (发送 CAN CAN) */

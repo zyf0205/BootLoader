@@ -11,12 +11,30 @@
 #include "version.h"
 #include <stdio.h>
 
-/* 1ms 定时回调: 驱动 LED/按键消抖/YMODEM 超时 */
+/* 1ms 中断只做轻量计数与消抖。YMODEM 超时逻辑不在这里跑:
+ * 协议状态机由主循环独占访问, 避免中断/主循环双上下文并发
+ * 读写状态与在中断里执行 printf/发送等非重入回调 (v3.3 竞态修复) */
+static volatile uint32_t s_ymodem_ticks = 0;
+
 void Systick_OnTick(void)
 {
     Led_Tick();
     Key_Tick();
-    ymodem_tick();
+    s_ymodem_ticks++;
+}
+
+/* 消费中断累积的 1ms 节拍, 在主循环上下文驱动 YMODEM 超时状态机 */
+static void PumpYmodemTicks(void)
+{
+    uint32_t pending;
+
+    __disable_irq();
+    pending        = s_ymodem_ticks;
+    s_ymodem_ticks = 0;
+    __enable_irq();
+
+    while (pending--)
+        ymodem_tick();
 }
 
 static void PrintBanner(void)
@@ -84,5 +102,6 @@ int main(void)
     while (1)
     {
         Updater_Process();
+        PumpYmodemTicks();
     }
 }
