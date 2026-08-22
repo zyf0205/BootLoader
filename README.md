@@ -45,6 +45,7 @@ BootLoader/
 ## 文档
 
 - [开发与构建](docs/开发与构建.md)：EIDE、Keil、WSL Agent、输出文件和验证命令
+- [架构详解](docs/架构详解.md)：分层架构图、升级时序图、YMODEM 状态机、并发设计与设计决策
 - [系统设计](docs/系统设计.md)：Flash 分区、启动决策、升级状态机和跳转流程
 - [升级与排错](docs/升级与排错.md)：YMODEM 操作、LED 状态和常见问题
 - [CHANGELOG](CHANGELOG.md)：版本演进与显著变更
