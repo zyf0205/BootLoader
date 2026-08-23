@@ -361,7 +361,4 @@ updater_state_t Updater_State(void)
     return s_state;
 }
 
-uint8_t Updater_Finished(void)
-{
-    return (s_state == UPDATER_SUCCESS || s_state == UPDATER_TIMEOUT);
-}
+

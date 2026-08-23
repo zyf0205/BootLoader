@@ -21,3 +21,6 @@ jobs:
 
       - name: Boot policy tests
         run: make -C tests/boot_policy test
+
+      - name: Updater power-fail safety tests
+        run: make -C tests/updater test

@@ -36,6 +36,5 @@
 
 /* ---- 串口接收缓冲 ---- */
 #define USART_RX_BUF_SIZE   2048        /* DMA 环形缓冲, 为主循环阻塞操作留余量 */
-#define USART_TX_BUF_SIZE   256         /* TX DMA 缓冲 */
 
 #endif /* __FLASH_CONFIG_H */

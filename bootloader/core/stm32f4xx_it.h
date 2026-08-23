@@ -12,8 +12,7 @@ void DebugMon_Handler(void);
 void PendSV_Handler(void);
 
 /* 外设中断处理函数分布在各自驱动中:
- *   SysTick_Handler        -> modules/systick/systick.c
- *   DMA2_Stream7_IRQHandler -> bootloader/drivers/usart/usart.c
+ *   SysTick_Handler -> modules/systick/systick.c
  */
 
 #endif /* __STM32F4XX_IT_H */

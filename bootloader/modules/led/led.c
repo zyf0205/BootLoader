@@ -66,18 +66,6 @@ void Led_Tick(void)
             Led_Toggle();
         break;
 
-    case LED_BLINK_RAPID:
-        if ((s_tick % 50) == 0)
-            Led_Toggle();
-        break;
-
-    case LED_HEARTBEAT:
-        if ((s_tick % 1000) == 0)
-            Led_Write(1);
-        else if ((s_tick % 1000) == 50)
-            Led_Write(0);
-        break;
-
     default:
         break;
     }

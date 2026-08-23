@@ -30,7 +30,4 @@ void Updater_Process(void);
 
 updater_state_t Updater_State(void);
 
-/* 流程是否已出结果 (SUCCESS 或 TIMEOUT) */
-uint8_t Updater_Finished(void);
-
 #endif /* __UPDATER_H */

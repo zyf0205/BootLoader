@@ -58,6 +58,7 @@ BootLoader/
 bash tools/build_check.sh
 make -C tests/ymodem test
 make -C tests/boot_policy test
+make -C tests/updater test
 ```
 
 全量构建必须保证 Bootloader 小于 16 KB。构建和测试输出均被 Git 忽略。

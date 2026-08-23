@@ -14,9 +14,7 @@ void Crc32_Init(void);
 void Crc32_Reset(void);
 
 /* 逐字计算 (len 为 32-bit 字个数) */
-uint32_t Crc32_CalcWords(const uint32_t *data, uint32_t word_cnt);
 
 /* 按字节计算, 尾部不足 4 字节用 0xFF 补齐 */
-uint32_t Crc32_CalcBytes(const uint8_t *data, uint32_t len);
 
 #endif /* __CRC32_H */

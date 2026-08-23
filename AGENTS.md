@@ -22,12 +22,16 @@ bash tools/build_check.sh
 验证内容: 两个工程全部源文件 AC5 编译零错误零警告 + 链接 + bin 体积检查 (<16KB)。
 输出到 `build/check/`(gitignored)。
 
-YMODEM 协议单元测试 (Linux gcc, 与硬件无关):
+主机单元测试 (Linux gcc, 与硬件无关):
 
 ```bash
 cd tests/ymodem && make test
 cd tests/boot_policy && make test
+cd tests/updater && make test
 ```
+
+错误码约定: 驱动层返回领域错误枚举 (如 flash_err_t); 回调/协议层
+返回 int (0 成功, 非 0 失败); 布尔查询返回 uint8_t (0/1)。不混用。
 
 ## AC5 关键编译知识 (踩过的坑)
 

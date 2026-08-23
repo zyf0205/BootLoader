@@ -9,8 +9,6 @@ typedef enum {
     LED_ON,             /* 常亮 */
     LED_BLINK_SLOW,     /* 慢闪 1Hz   - 等待连接 */
     LED_BLINK_FAST,     /* 快闪 5Hz   - 正在接收数据 */
-    LED_BLINK_RAPID,    /* 急促闪 10Hz - 错误提示 */
-    LED_HEARTBEAT,      /* 心跳: 亮50ms 灭950ms */
 } led_state_t;
 
 void Led_Init(void);
