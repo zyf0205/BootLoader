@@ -5,7 +5,7 @@
 #include "boot_api.h"
 #include "flash_config.h"
 
-#define LED_BLINK_INTERVAL_MS  50    /* 心跳闪烁周期 */
+#define LED_BLINK_INTERVAL_MS  1000    /* 心跳闪烁周期 */
 #define REENTRY_HOLD_MS        1500  /* 长按进入升级模式的判定时间 */
 #define REENTRY_BLINK_MS       100   /* 长按期间 LED 快闪提示 */
 
