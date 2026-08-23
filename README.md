@@ -1,5 +1,7 @@
 # STM32F411 YMODEM Bootloader
 
+[![tests](https://github.com/zyf0205/BootLoader/actions/workflows/tests.yml/badge.svg)](https://github.com/zyf0205/BootLoader/actions/workflows/tests.yml)
+
 面向 STM32F411CEU6 的串口 Bootloader。Bootloader 通过 USART1 接收 YMODEM 固件，写入 APP 分区，完成 CRC32 完整性验证并跳转运行；仓库同时提供一个 LED 闪烁演示 APP。
 
 ## 项目状态

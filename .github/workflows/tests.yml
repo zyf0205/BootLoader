@@ -1,0 +1,23 @@
+name: tests
+
+# 主机单元测试流水线: 协议层 (YMODEM) + 启动/升级策略层
+# AC5 固件编译依赖本机 Keil 许可, 不在 CI 中运行, 由 tools/build_check.sh 在本地验证
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: YMODEM protocol tests
+        run: make -C tests/ymodem test
+
+      - name: Boot policy tests
+        run: make -C tests/boot_policy test
