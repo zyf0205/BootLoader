@@ -12,7 +12,9 @@ SRC     = test_updater.c \
           ../../bootloader/app/boot_policy.c \
           ../../bootloader/protocols/ymodem/ymodem.c \
           ../../bootloader/protocols/ymodem/crc16.c
-TARGET  = test_updater
+# 产物名避开 "update" 字样: 无 manifest 的 exe 名含 update 会被
+# Windows UAC 误判为安装程序 (错误 740), 导致 make test 无法运行
+TARGET  = test_powerfail
 
 all: $(TARGET)
 

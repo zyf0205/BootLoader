@@ -49,7 +49,10 @@ Desktop.ini
 # ---- 测试产物 ----
 tests/ymodem/test_ymodem
 tests/boot_policy/test_boot_policy
-tests/updater/test_updater
+tests/updater/test_powerfail
+tests/ymodem/test_ymodem.exe
+tests/boot_policy/test_boot_policy.exe
+tests/updater/test_powerfail.exe
 
 # ---- EIDE 依赖缓存 ----
 .eide/.de/
