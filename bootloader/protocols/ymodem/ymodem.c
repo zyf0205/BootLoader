@@ -34,12 +34,12 @@ static uint16_t s_pkt_idx = 0;          /* 已收字节数 */
 static uint16_t s_pkt_len = 0;          /* 期望包总长 */
 static uint16_t s_pkt_data_size = 0;    /* 数据段长度 128/1024 */
 
-static uint8_t  s_expected_seq = 1;
-static uint8_t  s_error_cnt = 0;
-static uint32_t s_tick_ms = 0;
-static uint32_t s_last_resp_tick = 0;
+static uint8_t  s_expected_seq = 1;     /* 下一个期望的数据包序号 */
+static uint8_t  s_error_cnt = 0;        /* 连续错误计数, 达上限中止会话 */
+static uint32_t s_tick_ms = 0;          /* 协议内部毫秒时钟 (ymodem_tick 累加) */
+static uint32_t s_last_resp_tick = 0;   /* 上次发出响应的时刻 (空闲重发计时) */
 static uint32_t s_last_byte_tick = 0;   /* 最近一次收到字节的时刻 (帧内超时用) */
-static uint8_t  s_last_resp = YM_C;
+static uint8_t  s_last_resp = YM_C;     /* 最后发出的响应字节 (等包超时时原样重发) */
 
 /* ======================== 发送辅助 ======================== */
 

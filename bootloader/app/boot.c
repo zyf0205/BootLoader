@@ -7,6 +7,18 @@
 #include "systick.h"
 #include "boot_config.h"
 
+/* ================================================================== *
+ * 启动决策执行层
+ *
+ * 跨复位状态全部存放在 RTC 备份域寄存器 (VBAT 供电, 软件复位不清零):
+ *   BKP1R/BKP2R - APP 升级请求魔数 + 反码
+ *   BKP3R       - 升级完成后的受控复位标志
+ *   BKP4R       - 连续 HardFault 复位计数
+ * 写备份域前需开 PWR 时钟并置 DBP 解除写保护, 下同。
+ * ================================================================== */
+
+/* 读取并清除 APP 升级请求。魔数与反码须同时匹配才认定有效
+ * (降低随机位翻转/残留值误判概率); 读后立即清零, 请求一次性生效 */
 uint8_t Boot_TakeAppRequest(void)
 {
     uint8_t requested = 0;
@@ -41,6 +53,7 @@ uint8_t Boot_IsUpdateKeyHeld(void)
     return 1;
 }
 
+/* 读取并清除升级完成标志 (Boot_ResetAfterUpdate 写入, 一次性) */
 uint8_t Boot_TakePostUpdate(void)
 {
     uint8_t post_update = 0;
@@ -56,6 +69,8 @@ uint8_t Boot_TakePostUpdate(void)
     return post_update;
 }
 
+/* 标记 "升级已完成" 并复位。下次启动 Boot_TakePostUpdate() 消费该
+ * 标志, 跳过按键检测直接进入升级模式 (用于升级后确认新固件) */
 void Boot_ResetAfterUpdate(void)
 {
     Usart_WaitTxIdle();
@@ -129,6 +144,7 @@ void Boot_JumpToApp(void)
     ((void (*)(void))reset)();
 }
 
+/* 查询连续 HardFault 复位次数 (不清零, 供 main 判断是否停在升级模式) */
 uint32_t Boot_PeekFaultResets(void)
 {
     uint32_t count;
@@ -142,6 +158,7 @@ uint32_t Boot_PeekFaultResets(void)
     return count;
 }
 
+/* HardFault 处理器调用: 计数 +1 (封顶, 防溢出) 后立即复位 */
 void Boot_RecordFaultReset(void)
 {
     RCC->APB1ENR |= RCC_APB1ENR_PWREN;
@@ -154,6 +171,7 @@ void Boot_RecordFaultReset(void)
     PWR->CR &= ~PWR_CR_DBP;
 }
 
+/* 系统恢复正常后清零计数 (正常跳转 APP 前 / 进入升级模式时调用) */
 void Boot_ClearFaultResets(void)
 {
     RCC->APB1ENR |= RCC_APB1ENR_PWREN;

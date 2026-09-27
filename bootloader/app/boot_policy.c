@@ -1,5 +1,11 @@
 #include "boot_policy.h"
 
+/* 启动原因决策, 优先级从高到低:
+ *   1. APP 主动请求升级 (软件重入 API)
+ *   2. 用户按住升级按键
+ *   3. APP 无效 (无固件/校验失败), 必须留在升级模式救砖
+ *   4. 一切正常 -> 直接跳转 APP
+ * 策略与输入解耦, 便于主机单元测试覆盖全部分支 */
 boot_reason_t BootPolicy_Select(uint8_t app_requested,
                                 uint8_t key_held,
                                 uint8_t app_valid)

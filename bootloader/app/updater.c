@@ -11,14 +11,14 @@
 
 /* ---- 内部状态 ---- */
 static updater_state_t s_state = UPDATER_WAITING;
-static uint32_t s_window_start = 0;
-static uint32_t s_window_ms    = 0;
-static uint32_t s_done_tick    = 0;
+static uint32_t s_window_start = 0;    /* 等待窗口起点 (Systick 毫秒) */
+static uint32_t s_window_ms    = 0;    /* 窗口时长, 0 = 无限等待 */
+static uint32_t s_done_tick    = 0;    /* 升级完成时刻 (SUCCESS 延时跳转用) */
 
 /* ---- 传输上下文 ---- */
-static uint32_t s_fw_size     = 0;
-static uint32_t s_write_addr  = 0;
-static uint16_t s_fw_version  = 0;
+static uint32_t s_fw_size     = 0;     /* 本次固件总大小 (字节) */
+static uint32_t s_write_addr  = 0;     /* 下一包的写入地址 (APP 区内递增) */
+static uint16_t s_fw_version  = 0;     /* 文件名解析出的版本, 0 = 未知 */
 
 /* ======================== 辅助函数 ======================== */
 

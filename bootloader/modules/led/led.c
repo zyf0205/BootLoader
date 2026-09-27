@@ -1,10 +1,17 @@
 #include "led.h"
 #include "board.h"
 
+/* ================================================================== *
+ * 状态 LED 驱动: 设置目标状态后由 1ms 的 Led_Tick() 自动维持闪烁,
+ * 业务代码只调 Led_Set(), 不必自己管翻转时序。
+ * 极性 (低电平点亮) 由 board.h 的 LED_ACTIVE_LOW 统一适配。
+ * ================================================================== */
+
 /* ---- 内部状态 ---- */
 static led_state_t s_state = LED_OFF;
-static uint32_t    s_tick  = 0;
+static uint32_t    s_tick  = 0;    /* 当前状态持续的毫秒数 */
 
+/* 写引脚电平 (内部处理低电平点亮极性) */
 static void Led_Write(uint8_t on)
 {
 #if LED_ACTIVE_LOW
@@ -35,7 +42,7 @@ void Led_Init(void)
 void Led_Set(led_state_t state)
 {
     s_state = state;
-    s_tick  = 0;
+    s_tick  = 0;    /* 重新计时, 让闪烁相位从头开始 */
 
     switch (state)
     {
@@ -50,6 +57,8 @@ void Led_Toggle(void)
     GPIO_ToggleBits(LED_PORT, LED_PIN);
 }
 
+/* 每 1ms 由定时中断调用一次, 按当前状态维持闪烁节奏:
+ * 慢闪每 500ms 翻转一次 (周期 1s = 1Hz), 快闪每 100ms (5Hz) */
 void Led_Tick(void)
 {
     s_tick++;

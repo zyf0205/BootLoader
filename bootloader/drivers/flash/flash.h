@@ -8,21 +8,22 @@
  * 内部 Flash 驱动: APP 区擦写 + 固件元数据管理
  * ================================================================== */
 
+/* Flash 操作结果 (驱动层领域错误码) */
 typedef enum {
-    FLASH_OK = 0,
-    FLASH_ERR_ERASE,
-    FLASH_ERR_WRITE,
-    FLASH_ERR_VERIFY,
-    FLASH_ERR_PARAM,
+    FLASH_OK = 0,        /* 成功 */
+    FLASH_ERR_ERASE,     /* 扇区擦除失败 */
+    FLASH_ERR_WRITE,     /* 编程 (写入) 失败 */
+    FLASH_ERR_VERIFY,    /* 写入后回读校验不一致 */
+    FLASH_ERR_PARAM,     /* 参数非法 (空指针 / 地址越界) */
 } flash_err_t;
 
-/* 固件元数据 (16 字节, 存于 Sector 6) */
+/* 固件元数据 (16 字节, 存于 Sector 6; 字段全部 4 字节对齐便于按字编程) */
 typedef struct {
-    uint32_t magic;       /* META_MAGIC 表示有效 */
+    uint32_t magic;       /* META_MAGIC 表示有效 (最后写入, 见 Flash_SaveMeta) */
     uint32_t size;        /* 固件大小 (bytes) */
     uint32_t crc32;       /* 固件 CRC32 (MPEG-2) */
-    uint16_t version;     /* 固件版本 (来自文件名解析) */
-    uint16_t reserved;
+    uint16_t version;     /* 固件版本 (来自文件名解析), 0 = 未知 */
+    uint16_t reserved;    /* 保留对齐字段, 恒为 0 */
 } fw_meta_t;
 
 void Flash_Init(void);

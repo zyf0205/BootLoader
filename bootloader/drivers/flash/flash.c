@@ -11,6 +11,7 @@ static const uint32_t s_app_sectors[] = {
     FLASH_Sector_5,
 };
 
+/* 初始化依赖的外设: 目前只有 CRC 计算单元 (供固件校验使用) */
 void Flash_Init(void)
 {
     Crc32_Init();

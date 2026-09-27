@@ -1,3 +1,9 @@
+/* ================================================================== *
+ * APP 演示固件入口
+ * 功能: LED 心跳 (1s 周期); 长按 USER 键 1.5s 通过 boot_api 请求
+ * 重入 Bootloader 进入 YMODEM 升级模式 (保留的软件重入 API 演示)。
+ * ================================================================== */
+
 #include "stm32f4xx.h"
 #include "systick.h"
 #include "led.h"
@@ -6,8 +12,8 @@
 #include "flash_config.h"
 
 #define LED_BLINK_INTERVAL_MS  1000    /* 心跳闪烁周期 */
-#define REENTRY_HOLD_MS        1500  /* 长按进入升级模式的判定时间 */
-#define REENTRY_BLINK_MS       100   /* 长按期间 LED 快闪提示 */
+#define REENTRY_HOLD_MS        1500    /* 长按进入升级模式的判定时间 */
+#define REENTRY_BLINK_MS       100     /* 长按期间 LED 快闪提示 */
 
 void Systick_OnTick(void)
 {
