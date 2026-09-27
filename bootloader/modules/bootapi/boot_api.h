@@ -22,7 +22,7 @@
 
 /* ---- Bootloader 固件信息 (APP 与 BL 共享, 需保持一致) ---- */
 #define BOOT_BL_VERSION_MAJOR  3
-#define BOOT_BL_VERSION_MINOR  2
+#define BOOT_BL_VERSION_MINOR  3
 #define BOOT_APP_BASE_ADDR     0x08004000    /* APP 起始地址 (Sector 1) */
 #define BOOT_APP_MAX_SIZE      0x3C000       /* APP 最大 240KB */
 
