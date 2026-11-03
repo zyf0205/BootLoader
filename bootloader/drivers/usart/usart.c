@@ -143,6 +143,7 @@ void Usart_FlushRx(void)
 {
     s_rx_read_pos   = Usart_RxWritePos();
     s_rx_last_write = s_rx_read_pos;
+    s_rx_overflow   = 0;   /* 数据已丢弃, 溢出标志一并清除, 避免重复重启 */
 }
 
 uint8_t Usart_TakeRxOverflow(void)

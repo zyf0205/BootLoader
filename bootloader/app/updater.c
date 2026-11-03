@@ -106,6 +106,7 @@ static int YmodemSend(const uint8_t *data, uint16_t len)
 static int OnHeader(const char *name, uint32_t size)
 {
     const char *base = BaseName(name);
+    uint8_t    app_valid;
     uint16_t   incoming_ver;
     fw_meta_t  meta;
 
@@ -123,11 +124,13 @@ static int OnHeader(const char *name, uint32_t size)
         return -1;
     }
 
-    /* 防降级: 当前 APP 完好时拒绝更旧版本 (此时元数据尚未失效)。
-     * APP 无效 (recovery) 时 BootPolicy 放行, 保证旧版本可救砖 */
+    /* 防降级: 仅当当前 APP 实际完好 (元数据 + 向量表 + CRC32 全部
+     * 通过) 时拒绝更旧版本。元数据有效但固件已损坏 (如 SWD 直刷裸
+     * 固件) 时放行任意版本, 保证旧版本可救砖 */
+    app_valid    = Flash_IsAppValid();
     incoming_ver = ParseVersion(base);
-    if (Flash_LoadMeta(&meta) &&
-        !BootPolicy_AllowUpgrade(1, meta.version, incoming_ver))
+    if (app_valid && Flash_LoadMeta(&meta) &&
+        !BootPolicy_AllowUpgrade(app_valid, meta.version, incoming_ver))
     {
         printf("\r\nError: downgrade rejected (installed v%u.%u, incoming v%u.%u).\r\n",
                meta.version >> 8, meta.version & 0xFF,
@@ -212,7 +215,7 @@ static void OnAbort(const char *reason)
 
 static void Restart(void)
 {
-    Led_Set(LED_BLINK_SLOW);
+    Led_Set(LED_BLINK_SLOW);   /* 回到等待状态, 恢复慢闪指示 */
     printf("\r\nRestarting receiver, waiting for YMODEM...\r\n");
     ymodem_stop();
     Usart_FlushRx();   /* 丢弃残留脏数据, 避免污染新会话 (如 0x18 误判中止) */
@@ -256,6 +259,11 @@ static void Finalize(void)
     }
     printf("OK\r\n");
 
+    /* 升级成功: 固件已被校验与提交, Fault 计数失去意义, 复位前清零。
+     * 未在此路径清零的 Fault 计数 (recovery 中放弃升级直接断电) 会
+     * 继续闩锁, 直到下一次正常启动或成功升级 */
+    Boot_ClearFaultResets();
+
     printf("\r\nUpdate success! Rebooting to APP in %d s...\r\n",
            BOOT_JUMP_DELAY_MS / 1000);
     Led_Set(LED_ON);
@@ -293,9 +301,12 @@ void Updater_Begin(uint32_t window_ms)
 
 void Updater_Process(void)
 {
-    /* 0. RX 缓冲溢出检测: DMA 已覆盖未读数据 (如发送端不等 'C'
-     *    在擦除期间硬冲), 缓冲内容不可信, 重启接收会话 */
-    if (Usart_TakeRxOverflow())
+    /* 0. RX 缓冲溢出检测 (仅接收相关状态): DMA 已覆盖未读数据
+     *    (如发送端不等 'C' 在擦除期间硬冲), 缓冲内容不可信, 重启
+     *    接收会话。SUCCESS/TIMEOUT 阶段的残留垃圾不重新开放会话,
+     *    避免刚提交的固件被新会话擦除 */
+    if ((s_state == UPDATER_WAITING || s_state == UPDATER_RECEIVING) &&
+        Usart_TakeRxOverflow())
     {
         printf("\r\nRX buffer overflow, restarting receiver...\r\n");
         Restart();

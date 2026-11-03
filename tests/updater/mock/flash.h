@@ -20,6 +20,7 @@ typedef struct {
     uint32_t crc32;
     uint16_t version;
     uint16_t reserved;
+    uint32_t meta_crc32;   /* 与固件侧 flash.h 保持一致 (SaveMeta 计算提交) */
 } fw_meta_t;
 
 void Flash_Init(void);

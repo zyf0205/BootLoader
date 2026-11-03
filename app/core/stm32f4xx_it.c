@@ -1,5 +1,6 @@
 #include "stm32f4xx_it.h"
 #include "stm32f4xx.h"
+#include "boot_api.h"
 
 /* ================================================================== *
  * Cortex-M4 异常处理
@@ -27,11 +28,13 @@ __asm void HardFault_Handler(void)
     B HardFault_Handler_C
 }
 
-/* C 入口: APP 内发生致命异常直接复位重启, 从 Bootloader 重新走
- * 启动决策。stack 参数仅为约定签名, 暂未使用 */
+/* C 入口: 经 boot_api 上报一次 Fault 复位 (BKP4R 计数 +1, 与
+ * Bootloader 共享) 后复位重启。连续达到 Bootloader 上限时由
+ * Bootloader 停在升级模式, 避免 Fault-复位-Fault 无限循环。
+ * stack 参数仅为约定签名, 暂未使用 */
 void HardFault_Handler_C(uint32_t *stack)
 {
-    NVIC_SystemReset();
+    Boot_ReportFaultReset();
     (void)stack;
 }
 

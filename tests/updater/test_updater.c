@@ -75,6 +75,7 @@ static uint32_t s_watermark;        /* APP 区已写入高水位 (相对 APP_ADD
 static uint32_t s_sim_crc;          /* CalcAppCrc32 最近返回值 */
 static uint8_t  s_fail_save_meta;   /* 失败注入: SaveMeta 返回错误 */
 static uint8_t  s_load_valid;       /* LoadMeta 返回已装固件 (防降级用) */
+static uint8_t  s_app_broken;       /* 注入: 元数据有效但 APP 实际损坏 */
 static fw_meta_t s_load_content;
 static int      s_invariant_hits;   /* 不变量实际检查次数 */
 static int      s_invariant_fails;
@@ -112,6 +113,7 @@ static void SimReset(int installed)
     s_log_n           = 0;
     s_fail_save_meta  = 0;
     s_load_valid      = 0;
+    s_app_broken      = 0;
     s_invariant_hits  = 0;
     s_invariant_fails = 0;
     reset_called      = 0;
@@ -181,7 +183,7 @@ uint32_t Flash_CalcAppCrc32(uint32_t size)
 
 uint8_t Flash_IsAppValid(void)
 {
-    return s_meta.magic == META_MAGIC;
+    return !s_app_broken && s_meta.magic == META_MAGIC;
 }
 
 flash_err_t Flash_InvalidateMeta(void)
@@ -233,6 +235,7 @@ uint32_t Systick_GetTick(void) { return tick_ms; }
 
 void Boot_ResetAfterUpdate(void) { reset_called = 1; }
 void Boot_JumpToApp(void)        { }
+void Boot_ClearFaultResets(void) { }   /* Finalize 成功后清零 Fault 计数 */
 void NVIC_SystemReset(void)      { }   /* TIMEOUT 防御路径, 用例不触达 */
 
 /* 模拟主循环: Updater_Process 每次调用只推进一步状态机
@@ -382,6 +385,28 @@ static void test_downgrade_rejected(void)
     printf("test_downgrade_rejected: PASS\n");
 }
 
+/* 2b. 元数据有效但 APP 已损坏 (如 SWD 直刷裸固件): 放行旧版本救砖 */
+static void test_downgrade_allowed_when_app_broken(void)
+{
+    uint8_t fw[128];
+
+    SimReset(1 /* installed v1.5 */);
+    s_app_broken = 1;
+    memset(fw, 0, sizeof(fw));
+
+    Updater_Init();
+    Updater_Begin(0);
+
+    tx_header("fw_v1.2.bin", sizeof(fw));
+    PumpUpdater(2);        /* 文件头被接受 -> OnPrepare 失效+擦除 */
+
+    CHECK(LogFind(OP_INVALIDATE, 0) >= 0, "header accepted on broken APP");
+    CHECK(LogFind(OP_ERASE, 0) >= 0, "recovery erase allowed");
+    CHECK(s_meta.magic == 0, "old meta invalidated for rewrite");
+
+    printf("test_downgrade_allowed_when_app_broken: PASS\n");
+}
+
 /* 3. 传输截断 (协议完成但字节数不足): 不提交元数据 */
 static void test_truncated_transfer_no_commit(void)
 {
@@ -464,13 +489,46 @@ static void test_rx_overflow_restart(void)
     printf("test_rx_overflow_restart: PASS\n");
 }
 
+/* 6. SUCCESS 态 RX 溢出: 忽略, 不重开升级会话 (保护已提交固件) */
+static void test_success_overflow_ignored(void)
+{
+    static uint8_t fw[128];
+    int i;
+
+    SimReset(0);
+    for (i = 0; i < (int)sizeof(fw); i++)
+        fw[i] = (uint8_t)i;
+
+    Updater_Init();
+    Updater_Begin(0);
+
+    tx_header("fw_v2.0.bin", sizeof(fw));
+    tx_firmware(fw, sizeof(fw));
+    PumpUpdater(3);
+
+    CHECK(Updater_State() == UPDATER_SUCCESS, "reached SUCCESS");
+    CHECK(s_meta.magic == META_MAGIC, "meta committed");
+
+    flushrx_count   = 0;
+    s_overflow_once = 1;
+    PumpUpdater(1);
+
+    CHECK(Updater_State() == UPDATER_SUCCESS, "stays in SUCCESS");
+    CHECK(flushrx_count == 0, "no receiver restart");
+    CHECK(ymodem_state() == YMODEM_DONE, "session untouched");
+
+    printf("test_success_overflow_ignored: PASS\n");
+}
+
 int main(void)
 {
     test_full_update_sequence();
     test_downgrade_rejected();
+    test_downgrade_allowed_when_app_broken();
     test_truncated_transfer_no_commit();
     test_meta_save_failure();
     test_rx_overflow_restart();
+    test_success_overflow_ignored();
 
     if (test_failed)
     {

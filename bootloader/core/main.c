@@ -119,7 +119,9 @@ int main(void)
 
     printf("Waiting for YMODEM (send App.bin)...\r\n\r\n");
     Led_Set(LED_BLINK_SLOW);
-    Boot_ClearFaultResets();    /* 已稳定进入升级模式, 清除 Fault 计数 */
+    /* Fault 计数刻意不清零: 达到上限后进入 recovery 的固件可能仍会
+     * 被判为"有效"而跳转, 清零会让断电重上电重新获得 3 次机会。
+     * 计数在正常启动跳转前清零, 重新烧写并成功启动后自然解除 */
     Updater_Begin(0);
 
     /* ---- 3. 升级主循环 (完成后自动跳转 APP) ---- */

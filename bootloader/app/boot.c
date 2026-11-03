@@ -12,8 +12,8 @@
  *
  * 跨复位状态全部存放在 RTC 备份域寄存器 (VBAT 供电, 软件复位不清零):
  *   BKP1R/BKP2R - APP 升级请求魔数 + 反码
- *   BKP3R       - 升级完成后的受控复位标志
- *   BKP4R       - 连续 HardFault 复位计数
+ *   BKP3R       - 升级完成后的受控复位标志 (仅跳过一次按键检测)
+ *   BKP4R       - 连续 HardFault 复位计数 (BL 自身 + APP 经 boot_api 上报)
  * 写备份域前需开 PWR 时钟并置 DBP 解除写保护, 下同。
  * ================================================================== */
 
@@ -70,7 +70,8 @@ uint8_t Boot_TakePostUpdate(void)
 }
 
 /* 标记 "升级已完成" 并复位。下次启动 Boot_TakePostUpdate() 消费该
- * 标志, 跳过按键检测直接进入升级模式 (用于升级后确认新固件) */
+ * 标志, 仅用于跳过一次按键检测——避免用户仍按着键时升级会话被
+ * 意外重开; 新 APP 校验通过则直接启动, 不改变启动决策 */
 void Boot_ResetAfterUpdate(void)
 {
     Usart_WaitTxIdle();
@@ -158,13 +159,15 @@ uint32_t Boot_PeekFaultResets(void)
     return count;
 }
 
-/* HardFault 处理器调用: 计数 +1 (封顶, 防溢出) 后立即复位 */
+/* BL 侧 HardFault 处理器调用: 计数 +1 (封顶 0xFFFF, 防溢出) 后立即复位。
+ * APP 侧经 boot_api.h 的 Boot_ReportFaultReset() 写同一计数器, 两者
+ * 上限一致; 判定统一用 >= BOOT_FAULT_LIMIT */
 void Boot_RecordFaultReset(void)
 {
     RCC->APB1ENR |= RCC_APB1ENR_PWREN;
     PWR->CR |= PWR_CR_DBP;
 
-    if (RTC->BKP4R < BOOT_FAULT_LIMIT)
+    if (RTC->BKP4R < 0xFFFFu)
         RTC->BKP4R++;
     __DSB();
 

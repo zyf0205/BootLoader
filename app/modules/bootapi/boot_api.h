@@ -20,9 +20,10 @@
 #define BOOT_BKP_REG         RTC->BKP1R
 #define BOOT_BKP_INV_REG     RTC->BKP2R
 
-/* ---- Bootloader 固件信息 (APP 与 BL 共享, 需保持一致) ---- */
-#define BOOT_BL_VERSION_MAJOR  3
-#define BOOT_BL_VERSION_MINOR  3
+/* HardFault 循环保护计数器 (与 Bootloader 共享, RTC 备份域跨复位保持) */
+#define BOOT_BKP_FAULT_REG   RTC->BKP4R
+
+/* ---- 分区契约 (APP 与 BL 共享, 需保持一致) ---- */
 #define BOOT_APP_BASE_ADDR     0x08004000    /* APP 起始地址 (Sector 1) */
 #define BOOT_APP_MAX_SIZE      0x3C000       /* APP 最大 240KB */
 
@@ -44,6 +45,28 @@ static inline void Boot_RequestBootloader(void)
     BOOT_BKP_INV_REG = ~BOOT_REQUEST_MAGIC;
 
     PWR->CR &= ~PWR_CR_DBP;
+
+    __DSB();
+    NVIC_SystemReset();
+}
+
+/**
+ * @brief  上报 APP 致命异常并复位 (在 HardFault 处理器中调用, 不返回)
+ *
+ * BKP4R 计数 +1 后立即系统复位。Bootloader 启动时读取该计数, 连续
+ * Fault 复位达到其配置上限 (boot_config.h BOOT_FAULT_LIMIT, 当前 3 次)
+ * 后不再自动跳 APP, 停在升级模式等待修复, 避免 Fault-复位-Fault
+ * 无限循环。Bootloader 自身的 HardFault 同样计入该计数。
+ */
+static inline void Boot_ReportFaultReset(void)
+{
+    /* 使能 PWR 时钟与备份域写访问 (HardFault 屏蔽低优先级中断,
+     * 寄存器操作无需额外关中断) */
+    RCC->APB1ENR |= RCC_APB1ENR_PWREN;
+    PWR->CR |= PWR_CR_DBP;
+
+    if (BOOT_BKP_FAULT_REG < 0xFFFFu)
+        BOOT_BKP_FAULT_REG++;
 
     __DSB();
     NVIC_SystemReset();

@@ -20,4 +20,14 @@ void Crc32_Reset(void)
     CRC->CR = CRC_CR_RESET;
 }
 
+void Crc32_Accumulate(uint32_t word)
+{
+    CRC->DR = word;
+}
+
+uint32_t Crc32_Result(void)
+{
+    return CRC->DR;
+}
+
 

@@ -16,8 +16,10 @@ void Crc32_Init(void);
 /* 复位计算单元: 每次新固件校验前调用, 从初始值重新累计 */
 void Crc32_Reset(void);
 
-/* 计算方法: 向 CRC->DR 逐个写入 32-bit 字, 全部写完后读 CRC->DR
- * 即为结果。具体用法见 flash.c 的 Flash_CalcAppCrc32()。
- * 注意: 外设要求按字访问, 固件长度按 4 字节对齐补齐后计算。 */
+/* 向计算单元送入一个 32-bit 字 (小端整字), 硬件自动迭代 */
+void Crc32_Accumulate(uint32_t word);
+
+/* 读取当前累计结果 (CRC->DR) */
+uint32_t Crc32_Result(void);
 
 #endif /* __CRC32_H */

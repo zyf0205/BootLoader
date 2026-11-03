@@ -31,7 +31,7 @@ uint32_t Boot_PeekFaultResets(void);
 /* HardFault 处理中记录一次复位 (达到 BOOT_FAULT_LIMIT 后不再累加) */
 void Boot_RecordFaultReset(void);
 
-/* 正常启动/进入升级模式时清零计数 */
+/* 正常启动跳转前 / 升级成功后清零计数 (进入升级模式不清零, 形成闩锁) */
 void Boot_ClearFaultResets(void);
 
 #endif /* __BOOT_H */

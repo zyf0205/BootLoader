@@ -1,5 +1,5 @@
 CC      = gcc
-CFLAGS  = -std=c99 -Wall -Wextra -O2 \
+CFLAGS  = -std=c99 -Wall -Wextra -Werror -O2 \
           -Imock \
           -I../../bootloader/app \
           -I../../bootloader/config \

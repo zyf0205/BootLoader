@@ -144,7 +144,7 @@ uint32_t Flash_CalcAppCrc32(uint32_t size)
 
     for (uint32_t i = 0; i < word_cnt; i++)
     {
-        CRC->DR = p[i];
+        Crc32_Accumulate(p[i]);
     }
 
     /* 尾部不足 4 字节: 高位补 0xFF */
@@ -158,10 +158,10 @@ uint32_t Flash_CalcAppCrc32(uint32_t size)
             last_word &= ~(0xFFu << (j * 8));
             last_word |= (uint32_t)pb[j] << (j * 8);
         }
-        CRC->DR = last_word;
+        Crc32_Accumulate(last_word);
     }
 
-    return CRC->DR;
+    return Crc32_Result();
 }
 
 /* ---- 使旧固件元数据失效 (擦除 APP 前调用) ---- */
@@ -185,9 +185,22 @@ flash_err_t Flash_InvalidateMeta(void)
     return FLASH_OK;
 }
 
+/* ---- 元数据自身 CRC32 (覆盖除 meta_crc32 外的全部字段) ---- */
+static uint32_t Meta_ComputeCrc(const fw_meta_t *meta)
+{
+    const uint32_t *p = (const uint32_t *)meta;
+    uint32_t i;
+
+    Crc32_Reset();
+    for (i = 0; i < sizeof(fw_meta_t) / 4 - 1; i++)
+        Crc32_Accumulate(p[i]);
+    return Crc32_Result();
+}
+
 /* ---- 保存元数据: 内容先写, magic 最后提交 ---- */
 flash_err_t Flash_SaveMeta(const fw_meta_t *meta)
 {
+    fw_meta_t committed;
     const uint32_t *p;
     uint32_t i;
 
@@ -197,9 +210,13 @@ flash_err_t Flash_SaveMeta(const fw_meta_t *meta)
     if (Flash_EraseMeta() != FLASH_OK)
         return FLASH_ERR_ERASE;
 
+    /* 提交前计算记录自身 CRC, 加载时可发现字段位翻转 */
+    committed = *meta;
+    committed.meta_crc32 = Meta_ComputeCrc(&committed);
+
     FLASH_Unlock();
 
-    p = (const uint32_t *)meta;
+    p = (const uint32_t *)&committed;
     for (i = 1; i < sizeof(fw_meta_t) / 4; i++)
     {
         if (FLASH_ProgramWord(META_ADDR + i * 4, p[i]) != FLASH_COMPLETE)
@@ -217,7 +234,7 @@ flash_err_t Flash_SaveMeta(const fw_meta_t *meta)
 
     FLASH_Lock();
 
-    if (memcmp((const void *)META_ADDR, meta, sizeof(fw_meta_t)) != 0)
+    if (memcmp((const void *)META_ADDR, &committed, sizeof(fw_meta_t)) != 0)
         return FLASH_ERR_VERIFY;
     return FLASH_OK;
 }
@@ -225,12 +242,21 @@ flash_err_t Flash_SaveMeta(const fw_meta_t *meta)
 /* ---- 读取元数据 ---- */
 uint8_t Flash_LoadMeta(fw_meta_t *meta)
 {
+    const fw_meta_t *stored;
+
     if (meta == NULL)
         return 0;
 
-    const fw_meta_t *stored = (const fw_meta_t *)META_ADDR;
+    stored = (const fw_meta_t *)META_ADDR;
 
     if (stored->magic != META_MAGIC)
+        return 0;
+
+    /* 记录自身 CRC 校验, 拦截 size/version 等字段的位翻转。
+     * meta_crc32 为擦除态 (0xFFFFFFFF) 视为旧 16B 格式记录:
+     * 按原字段内容继续使用, 下次 SaveMeta 起写入带 CRC 的新格式 */
+    if (stored->meta_crc32 != 0xFFFFFFFFu &&
+        stored->meta_crc32 != Meta_ComputeCrc(stored))
         return 0;
 
     memcpy(meta, stored, sizeof(fw_meta_t));
