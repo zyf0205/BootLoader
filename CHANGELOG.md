@@ -3,6 +3,80 @@
 本项目的显著变更记录。版本号遵循 `主.次.修订`，与
 `bootloader/config/version.h` 保持一致。
 
+## 未发布
+
+可靠性审查修复版本（代码审查发现的 1 项设计缺口、2 项意图偏差与
+3 项加固）。
+
+### 修复
+
+- **HardFault 循环保护覆盖 APP 侧 Fault（设计缺口）**：原 BKP4R 计数
+  仅由 Bootloader 自身的 HardFault 处理器写入，APP 跳转后向量表重定向，
+  APP 内 Fault 永不计数——有 bug 的新固件会 Fault-复位-循环且保护
+  永不触发。`boot_api.h` 新增 `Boot_ReportFaultReset()`（双工程契约
+  同步更新），APP 的 `HardFault_Handler` 经其上报；连续达到
+  `BOOT_FAULT_LIMIT` 后停在升级模式。
+- **防降级改用真实 APP 完整性**：`on_header` 防降级检查原以"元数据
+  有效"近似"APP 完好"（硬编码 `app_valid=1`），元数据有效但固件损坏
+  （如 SWD 直刷裸固件）时旧版本救砖被误拦。现经 `Flash_IsAppValid()`
+  全量校验（元数据 + 向量表 + CRC32）后再判定，与代码注释及
+  boot_policy 决策表的语义一致。
+- **升级完成标志语义修正（文档）**：BKP3R 实际行为是"跳过一次按键
+  检测后照常校验并启动新 APP"，`boot.c` 注释与《系统设计》启动流程图
+  此前误写为"进入升级模式"。
+
+### 新增
+
+- **元数据记录自身 CRC**：`fw_meta_t` 由 16B 扩展为 20B，新增
+  `meta_crc32` 字段（前 16 字节的 CRC32），`Flash_LoadMeta` 校验以
+  拦截元数据字段位翻转（防降级所依赖的 version 不再裸奔）。
+  `meta_crc32` 为擦除态 0xFFFFFFFF 的记录按旧 16B 格式兼容放行。
+  **注意**：旧格式元数据在本次升级后首次启动会被视为无效进入
+  recovery，重新发送一次 App.bin 即完成迁移。
+
+### 改进
+
+- RX 溢出检测仅在 `WAITING`/`RECEIVING` 态生效：升级已提交
+  （SUCCESS）后的残留垃圾不再重开会话擦除刚写入的固件。
+- `Restart()` 恢复 LED 慢闪，中止/失败回到等待期不再残留接收期快闪。
+- **Fault 计数改为闩锁语义**：进入升级模式不再清零 BKP4R，仅在正常
+  启动跳转前与升级成功后清零。原行为下连续 3 次 Fault 进入 recovery
+  后计数立即归零，断电重上电又会尝试跳转坏固件。
+- BL 与 APP 侧 Fault 计数上限统一为 0xFFFF（原 BL 侧封顶
+  `BOOT_FAULT_LIMIT`，APP 侧 0xFFFF，语义不对称）。
+- `Usart_FlushRx()` 同时清除 RX 溢出标志，避免丢弃脏数据后再次
+  触发多余的重启会话。
+- `BootPolicy_AllowUpgrade` 调用改为传入真实的 `app_valid`，不再
+  依赖外层短路与硬编码 `1`。
+- `fw_meta_t` 增加编译期断言（`sizeof == 20`），防止未来加字段时
+  静默改变 `meta_crc32` 的覆盖范围。
+- `BL_VERSION_STR` 由 `MAJOR/MINOR/PATCH` 派生，消除字符串与数值
+  手工同步的重复陷阱；删除未被引用的 `BL_VERSION` 数值宏与
+  `BOOT_BL_VERSION_*`。
+
+### 测试
+
+- `tests/updater` 新增 2 用例（5 → 7）：元数据有效但 APP 损坏时旧版本
+  放行救砖；SUCCESS 态 RX 溢出忽略。模拟层 `Flash_IsAppValid` 增加
+  "APP 损坏"注入开关，`fw_meta_t` 与固件侧同步 20B。
+- **新增 `tests/flash_valid`（10 用例）**：编译真实的 `flash.c`，用
+  软件 CRC-32/MPEG-2 替换硬件 CRC 外设、模拟 Flash 替换 StdPeriph
+  接口，覆盖启动校验的每个拒绝分支（魔数、MSP、Reset 向量与 Thumb
+  位、size 边界、整包 CRC、meta_crc32 位翻转、旧 16B 兼容、尾部补
+  0xFF）。为此 `crc32.c` 增加 `Crc32_Accumulate`/`Crc32_Result`
+  薄封装，`flash.c` 不再直接访问 `CRC->DR`。
+- 三个测试套件启用 `-Werror`。
+
+### 清理
+
+- 删除孤儿文件：两个子工程 `.code-workspace`、两个空模板
+  `.eide/files.options.yml`、两个与根配置重复的 `.eide/.gitignore`。
+- 删除零调用接口 `ymodem_abort()`。
+- 新增 `.gitattributes` 统一换行符（脚本/Makefile 强制 LF，
+  `.uvprojx` 保持 CRLF）。
+- README 增加架构图、技术亮点与"设计取舍与已知局限"小节。
+
+
 ## v3.3.1 - 2026-08-23
 
 测试背书与代码清理版本。

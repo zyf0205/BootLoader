@@ -50,9 +50,11 @@ Desktop.ini
 tests/ymodem/test_ymodem
 tests/boot_policy/test_boot_policy
 tests/updater/test_powerfail
+tests/flash_valid/test_flash_valid
 tests/ymodem/test_ymodem.exe
 tests/boot_policy/test_boot_policy.exe
 tests/updater/test_powerfail.exe
+tests/flash_valid/test_flash_valid.exe
 
 # ---- EIDE 依赖缓存 ----
 .eide/.de/

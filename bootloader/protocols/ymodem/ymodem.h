@@ -70,9 +70,6 @@ void ymodem_feed(uint8_t byte);
 /* 1ms 节拍: 超时重发/帧内超时 (与 ymodem_feed 同上下文调用, 勿在中断中调用) */
 void ymodem_tick(void);
 
-/* 接收端主动中止 (发送 CAN CAN) */
-void ymodem_abort(void);
-
 ymodem_state_t ymodem_state(void);
 
 /* 是否已收到有效文件头 (Boot 窗口用于判断用户是否开始升级) */

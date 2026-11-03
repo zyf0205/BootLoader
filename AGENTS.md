@@ -28,6 +28,7 @@ bash tools/build_check.sh
 cd tests/ymodem && make test
 cd tests/boot_policy && make test
 cd tests/updater && make test
+cd tests/flash_valid && make test
 ```
 
 错误码约定: 驱动层返回领域错误枚举 (如 flash_err_t); 回调/协议层
@@ -56,7 +57,7 @@ cd tests/updater && make test
 |------|------|------|------|
 | Bootloader | 0x08000000 | 16KB | Sector 0 |
 | APP | 0x08004000 | 240KB | Sector 1-5 |
-| Metadata | 0x08040000 | 128KB | Sector 6, 存 16B 元数据 |
+| Metadata | 0x08040000 | 128KB | Sector 6, 存 20B 元数据 |
 
 ## 用户日常构建
 

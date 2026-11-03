@@ -14,7 +14,7 @@
 
 set -e
 
-KEIL_BIN=/mnt/d/Keil_v5/ARM/ARMCC/bin
+KEIL_BIN=${KEIL_BIN:-/mnt/d/Keil_v5/ARM/ARMCC/bin}
 OUT=build/check
 CPU="--cpu Cortex-M4.fp"
 C_FLAGS="--c99 --split_sections -O0 --diag_suppress=1,1295"
@@ -33,7 +33,7 @@ APP_INC="-Iapp/core -Iapp/config \
          -Iapp/libraries/stdperiph/inc"
 
 echo "===== Bootloader ====="
-rm -rf $OUT
+rm -rf "$OUT"
 mkdir -p $OUT/obj_bl $OUT/obj_app
 
 bl_compile() { # $1=源文件 $2=对象名

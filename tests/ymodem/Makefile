@@ -1,5 +1,5 @@
 CC      = gcc
-CFLAGS  = -std=c99 -Wall -Wextra -O2 -I../../bootloader/protocols/ymodem
+CFLAGS  = -std=c99 -Wall -Wextra -Werror -O2 -I../../bootloader/protocols/ymodem
 SRC     = test_ymodem.c ../../bootloader/protocols/ymodem/ymodem.c ../../bootloader/protocols/ymodem/crc16.c
 TARGET  = test_ymodem
 

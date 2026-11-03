@@ -1,6 +1,7 @@
 name: tests
 
-# 主机单元测试流水线: 协议层 (YMODEM) + 启动/升级策略层
+# 主机单元测试流水线: 协议层 (YMODEM) + 启动/升级策略层 + updater 掉电安全
+#   + Flash 有效性校验
 # AC5 固件编译依赖本机 Keil 许可, 不在 CI 中运行, 由 tools/build_check.sh 在本地验证
 
 on:
@@ -24,3 +25,6 @@ jobs:
 
       - name: Updater power-fail safety tests
         run: make -C tests/updater test
+
+      - name: Flash validity tests
+        run: make -C tests/flash_valid test

@@ -400,11 +400,6 @@ void ymodem_tick(void)
     }
 }
 
-void ymodem_abort(void)
-{
-    DoAbort("receiver aborted");
-}
-
 ymodem_state_t ymodem_state(void)
 {
     return s_state;
