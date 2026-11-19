@@ -32,10 +32,13 @@ int fputc(int ch, FILE *f)
 
 /* ======================== 内部实现 ======================== */
 
-/* DMA 当前写入位置 (环形缓冲写指针) */
+/* DMA 当前写入位置 (环形缓冲写指针)
+ * 计数恰好为 0 的瞬间相减得到 SIZE, 归一化为 0, 避免越界索引 */
 static uint16_t Usart_RxWritePos(void)
 {
-    return USART_RX_BUF_SIZE - (uint16_t)DMA_GetCurrDataCounter(RX_DMA_STREAM);
+    uint16_t pos = (uint16_t)(USART_RX_BUF_SIZE -
+                              (uint16_t)DMA_GetCurrDataCounter(RX_DMA_STREAM));
+    return (pos < USART_RX_BUF_SIZE) ? pos : 0;
 }
 
 void Usart_Init(void)

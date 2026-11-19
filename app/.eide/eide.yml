@@ -66,9 +66,9 @@ targets:
         options:
           version: 4
           afterBuildTasks:
-            - name: "[Generate App.bin]"
+            - name: fromelf.exe --bin .\build\app\app.axf --output .\build\app\App.bin
               abortAfterFailed: true
-              command: fromelf.exe --bin "${OutDir}\${ProjectName}.axf" --output "${OutDir}\App.bin"
+              command: fromelf.exe --bin .\build\app\app.axf --output .\build\app\App.bin
               disable: false
           asm-compiler:
             defines: []

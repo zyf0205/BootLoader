@@ -91,9 +91,9 @@ targets:
         options:
           version: 4
           afterBuildTasks:
-            - name: "[Generate Bootloader.bin]"
+            - name: fromelf.exe --bin .\build\bootloader\bootloader.axf --output .\build\bootloader\Bootloader.bin
               abortAfterFailed: true
-              command: fromelf.exe --bin "${OutDir}\${ProjectName}.axf" --output "${OutDir}\Bootloader.bin"
+              command: fromelf.exe --bin .\build\bootloader\bootloader.axf --output .\build\bootloader\Bootloader.bin
               disable: false
           asm-compiler:
             defines: []
@@ -103,7 +103,7 @@ targets:
             C_FLAGS: --diag_suppress=1 --diag_suppress=1295
             c99-mode: true
             one-elf-section-per-function: true
-            optimization: level-0
+            optimization: level-2
             warnings: unspecified
           global:
             output-debug-info: enable

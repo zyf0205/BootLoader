@@ -6,6 +6,7 @@
 #include "flash.h"
 #include "ymodem.h"
 #include "boot.h"
+#include "boot_policy.h"
 #include "updater.h"
 #include "boot_config.h"
 #include "version.h"
@@ -24,7 +25,7 @@
 
 /* 1ms 中断只做轻量计数与消抖。YMODEM 超时逻辑不在这里跑:
  * 协议状态机由主循环独占访问, 避免中断/主循环双上下文并发
- * 读写状态与在中断里执行 printf/发送等非重入回调 (v3.3 竞态修复) */
+ * 读写状态与在中断里执行 printf/发送等非重入回调 */
 static volatile uint32_t s_ymodem_ticks = 0;
 
 void Systick_OnTick(void)

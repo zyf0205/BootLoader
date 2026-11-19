@@ -1,12 +1,10 @@
 # STM32F411 YMODEM Bootloader
 
-[![tests](https://github.com/zyf0205/BootLoader/actions/workflows/tests.yml/badge.svg)](https://github.com/zyf0205/BootLoader/actions/workflows/tests.yml)
-
 面向 STM32F411CEU6 的串口 Bootloader：通过 USART1 接收 YMODEM 固件，写入 APP 分区，
 完成 CRC32 完整性验证并跳转运行。仓库同时提供一个 LED 闪烁演示 APP。
 
-> A UART (YMODEM) bootloader for STM32F411CEU6 with power-fail-safe metadata commit,
-> host-side unit tests, and a demonstration application. Docs are in Chinese.
+> A UART (YMODEM) bootloader for STM32F411CEU6 with power-fail-safe metadata commit
+> and a demonstration application. Docs are in Chinese.
 
 ## 关键事实
 
@@ -17,9 +15,8 @@
 | 串口 | USART1，PA9/PA10，115200-8-N-1 |
 | 协议 | YMODEM CRC16，支持 128 B SOH 与 1 KB STX 数据包 |
 | 分区 | BL 16 KB / APP 240 KB / Metadata 128 KB / Reserved 128 KB |
-| Bootloader 体积 | 12460 B / 16384 B 门禁（`build_check.sh` `-O0` 口径） |
+| Bootloader 体积 | 12480 B / 16384 B 上限（ARM Compiler 5 `-O0` 口径） |
 | 构建 | Windows Keil MDK 或 VSCode + EIDE，均使用 ARM Compiler 5 |
-| 主机测试 | 15 YMODEM + 13 启动策略断言 + 7 updater 掉电安全 + 10 Flash 校验用例 |
 
 ## 架构
 
@@ -49,19 +46,15 @@ flowchart TD
 
 分层：`core`（启动编排）→ `app`（决策/升级编排）→ `protocols`（YMODEM）→
 `drivers`（USART/Flash/CRC32）→ `modules`（board/LED/按键/SysTick/Boot API）。
-协议层与策略层不含任何硬件头文件，可在主机上直接编译测试。
+协议层与策略层不含任何硬件头文件，便于移植和复用。
 
 ## 技术亮点
 
 - **掉电安全**：元数据两阶段提交（内容先写、`magic` 最后写作为提交点），
-  擦除前先使旧元数据失效。主机测试在**每一次 Flash 操作后**断言不变量
-  "元数据有效 ⇒ 固件已完整写入"，等价于在每个可能的断电时刻验证。
-- **可测试性**：`tests/updater` 编译**真实的** `updater.c + ymodem.c + boot_policy.c`，
-  仅替换 Flash 驱动；模拟层强制 Flash "只能 1→0" 的物理特性并记录全部操作顺序。
-  `tests/flash_valid` 编译**真实的** `flash.c`，用软件 CRC-32 替换硬件 CRC 外设，
-  覆盖启动校验的每个拒绝分支。
-- **单上下文状态机**：SysTick 中断只累加 1 ms 节拍，协议状态机全部在主循环串行执行
-  （v3.3 修复了中断/主循环并发读写协议状态的竞态）。
+  擦除前先使旧元数据失效。任何时刻断电，重启后要么运行旧固件，要么进入恢复模式，
+  不会启动未验证的固件。
+- **单上下文状态机**：SysTick 中断只累加 1 ms 节拍，协议状态机全部在主循环串行执行，
+  避免中断与主循环并发读写协议状态。
 - **协议健壮性**：8-bit 序号回绕（255→0）、1 s 帧内超时（半包滞留）、
   包内 `CAN CAN` 快速中止、重复包去重、最终 ACK 丢失重传兼容。
 - **数据通路**：USART1 + DMA2_Stream2 循环缓冲，主循环轮询，溢出可检测。
@@ -82,8 +75,6 @@ BootLoader/
 │   └── libraries/           CMSIS 和 STM32 StdPeriph
 ├── app/                     演示 APP 独立 Keil/EIDE 工程
 ├── docs/                    构建、设计和升级文档
-├── tests/                   YMODEM / 启动策略 / updater 掉电安全主机测试
-├── tools/build_check.sh     WSL 调 Windows AC5 的全量验证脚本
 └── BootLoader.code-workspace
 ```
 
@@ -105,18 +96,6 @@ LED 快闪提示后复位，业务固件可直接调用 `Boot_RequestBootloader(
 保证旧版本可救砖。Bootloader 另有 HardFault 复位循环保护：APP 经 `boot_api.h` 上报
 或 Bootloader 自身连续 3 次异常复位后停留在升级模式等待修复。
 
-## 验证
-
-```bash
-bash tools/build_check.sh        # 两个工程全量 AC5 编译 + 链接 + <16KB 门禁
-make -C tests/ymodem test
-make -C tests/boot_policy test
-make -C tests/updater test
-make -C tests/flash_valid test
-```
-
-全量构建必须保证 Bootloader 小于 16 KB。构建和测试输出均被 Git 忽略。
-
 ## 设计取舍与已知局限
 
 - **单 Bank，无 A/B 双备份**：16 KB Bootloader 的刻意取舍；坏固件依靠三重校验与
@@ -128,7 +107,7 @@ make -C tests/flash_valid test
 
 ## 文档
 
-- [开发与构建](docs/开发与构建.md)：EIDE、Keil、WSL Agent、输出文件和验证命令
+- [开发与构建](docs/开发与构建.md)：EIDE、Keil、输出文件和配置同步
 - [架构详解](docs/架构详解.md)：升级闭环全景图、分层架构图、启动决策与升级时序图、YMODEM/updater 状态机、掉电安全与 RX 数据通路图、设计决策
 - [系统设计](docs/系统设计.md)：Flash 分区图、启动决策流程图、升级流程概要与跳转流程
 - [升级与排错](docs/升级与排错.md)：YMODEM 操作、LED 状态和常见问题

@@ -6,7 +6,7 @@
 /* ================================================================== *
  * 固件升级状态机
  *
- *   WAITING --(收到文件头)--> RECEIVING --(YMODEM完成)--> SUCCESS -> 跳转APP
+ *   WAITING --(收到文件头)--> RECEIVING --(YMODEM完成)--> SUCCESS -> 延时复位
  *      ^                          |
  *      +--(传输中止, 自动重启)-----+
  *      | (窗口模式超时)
@@ -27,7 +27,5 @@ void Updater_Begin(uint32_t window_ms);
 
 /* 主循环调用: 灌入串口数据 + 状态机推进 */
 void Updater_Process(void);
-
-updater_state_t Updater_State(void);
 
 #endif /* __UPDATER_H */

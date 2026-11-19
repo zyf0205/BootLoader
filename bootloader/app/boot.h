@@ -2,7 +2,6 @@
 #define __BOOT_H
 
 #include "stm32f4xx.h"
-#include "boot_policy.h"
 
 /* ================================================================== *
  * 启动决策: 决定进入升级模式还是跳转 APP
@@ -28,7 +27,7 @@ void Boot_JumpToApp(void);
 /* 查询连续 HardFault 复位次数 (不清零) */
 uint32_t Boot_PeekFaultResets(void);
 
-/* HardFault 处理中记录一次复位 (达到 BOOT_FAULT_LIMIT 后不再累加) */
+/* HardFault 处理中记录一次复位 (计数封顶 0xFFFF, 防溢出) */
 void Boot_RecordFaultReset(void);
 
 /* 正常启动跳转前 / 升级成功后清零计数 (进入升级模式不清零, 形成闩锁) */

@@ -51,7 +51,9 @@ static uint16_t ParseVersion(const char *name)
 
             while (*q >= '0' && *q <= '9')
             {
-                major = major * 10 + (uint32_t)(*q - '0');
+                /* 超过 0xFF 后停止累加, 防止超长数字串溢出回绕成合法版本 */
+                if (major <= 0xFFu)
+                    major = major * 10 + (uint32_t)(*q - '0');
                 q++;
             }
 
@@ -60,10 +62,11 @@ static uint16_t ParseVersion(const char *name)
                 q++;
                 while (*q >= '0' && *q <= '9')
                 {
-                    minor = minor * 10 + (uint32_t)(*q - '0');
+                    if (minor <= 0xFFu)
+                        minor = minor * 10 + (uint32_t)(*q - '0');
                     q++;
                 }
-                if (major <= 0xFF && minor <= 0xFF)
+                if (major <= 0xFFu && minor <= 0xFFu)
                     return (uint16_t)((major << 8) | minor);
             }
         }
@@ -366,10 +369,3 @@ void Updater_Process(void)
         break;
     }
 }
-
-updater_state_t Updater_State(void)
-{
-    return s_state;
-}
-
-

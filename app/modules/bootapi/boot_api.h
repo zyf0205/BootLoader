@@ -2,7 +2,7 @@
 #define __BOOT_API_H
 
 /* ================================================================== *
- * Bootloader <-> APP 交互接口 (v3.2)
+ * Bootloader <-> APP 交互接口
  *
  * 使用方式: APP 工程将该头文件加入 include 路径,
  * 在需要进入升级模式时调用 Boot_RequestBootloader()。
