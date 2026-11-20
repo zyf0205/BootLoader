@@ -11,9 +11,7 @@
 
 /* ---- 内部状态 ---- */
 static updater_state_t s_state = UPDATER_WAITING;
-static uint32_t s_window_start = 0;    /* 等待窗口起点 (Systick 毫秒) */
-static uint32_t s_window_ms    = 0;    /* 窗口时长, 0 = 无限等待 */
-static uint32_t s_done_tick    = 0;    /* 升级完成时刻 (SUCCESS 延时跳转用) */
+static uint32_t s_done_tick = 0;    /* 升级完成时刻 (SUCCESS 延时跳转用) */
 
 /* ---- 传输上下文 ---- */
 static uint32_t s_fw_size     = 0;     /* 本次固件总大小 (字节) */
@@ -214,6 +212,14 @@ static void OnAbort(const char *reason)
     printf("\r\nAborted: %s\r\n", reason);
 }
 
+/* 会话是否已越过"等待文件头"阶段: 只有受理了文件头才会进入这三个状态 */
+static uint8_t SessionStarted(void)
+{
+    ymodem_state_t st = ymodem_state();
+
+    return (st == YMODEM_RX_DATA || st == YMODEM_WAIT_EOT || st == YMODEM_DONE);
+}
+
 /* ======================== 升级流程 ======================== */
 
 static void Restart(void)
@@ -292,11 +298,9 @@ void Updater_Init(void)
     s_state = UPDATER_WAITING;
 }
 
-void Updater_Begin(uint32_t window_ms)
+void Updater_Begin(void)
 {
-    s_window_ms    = window_ms;
-    s_window_start = Systick_GetTick();
-    s_state        = UPDATER_WAITING;
+    s_state = UPDATER_WAITING;
 
     Usart_FlushRx();   /* 丢弃上电/上次会话残留的 RX 脏数据 */
     ymodem_start();
@@ -304,9 +308,11 @@ void Updater_Begin(uint32_t window_ms)
 
 void Updater_Process(void)
 {
-    /* 0. RX 缓冲溢出检测 (仅接收相关状态): DMA 已覆盖未读数据
+    uint8_t byte;
+
+    /* 0. RX 缓冲溢出检测 (仅接收相关状态): DMA 已绕过未读数据
      *    (如发送端不等 'C' 在擦除期间硬冲), 缓冲内容不可信, 重启
-     *    接收会话。SUCCESS/TIMEOUT 阶段的残留垃圾不重新开放会话,
+     *    接收会话。SUCCESS 阶段的残留垃圾不重新开放会话,
      *    避免刚提交的固件被新会话擦除 */
     if ((s_state == UPDATER_WAITING || s_state == UPDATER_RECEIVING) &&
         Usart_TakeRxOverflow())
@@ -316,32 +322,18 @@ void Updater_Process(void)
         return;
     }
 
-    /* 1. 灌入串口数据 */
-    while (Usart_RxAvailable() > 0)
-    {
-        uint8_t byte;
-        if (Usart_ReadByte(&byte) == 0)
-            ymodem_feed(byte);
-    }
+    /* 1. 灌入串口数据 (ReadByte 内部已含可用字节更新与溢出检测) */
+    while (Usart_ReadByte(&byte) == 0)
+        ymodem_feed(byte);
 
     /* 2. 状态机推进 */
     switch (s_state)
     {
     case UPDATER_WAITING:
-        if (ymodem_started())
-        {
-            s_state = UPDATER_RECEIVING;
-        }
-        else if (ymodem_state() == YMODEM_ABORTED)
-        {
+        if (ymodem_state() == YMODEM_ABORTED)
             Restart();   /* 文件头被拒 / 发送端中止 -> 重启接收 */
-        }
-        else if (s_window_ms != 0 &&
-                 (Systick_GetTick() - s_window_start) >= s_window_ms)
-        {
-            ymodem_stop();
-            s_state = UPDATER_TIMEOUT;
-        }
+        else if (SessionStarted())
+            s_state = UPDATER_RECEIVING;   /* 文件头已受理 */
         break;
 
     case UPDATER_RECEIVING:
@@ -354,15 +346,6 @@ void Updater_Process(void)
     case UPDATER_SUCCESS:
         if ((Systick_GetTick() - s_done_tick) >= BOOT_JUMP_DELAY_MS)
             Boot_ResetAfterUpdate();
-        break;
-
-    case UPDATER_TIMEOUT:
-        /* 窗口超时: 尝试启动已验证的 APP; 跳不过去则复位重来,
-         * 不再停在死状态空转 (当前窗口为无限等待, 此为防御路径) */
-        printf("\r\nUpdate window timeout.\r\n");
-        if (Flash_IsAppValid())
-            Boot_JumpToApp();
-        NVIC_SystemReset();
         break;
 
     default:

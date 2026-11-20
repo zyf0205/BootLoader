@@ -26,7 +26,6 @@
 static const ymodem_callbacks_t *s_cb = NULL;
 
 static ymodem_state_t s_state = YMODEM_IDLE;
-static uint8_t  s_started = 0;          /* 已收到有效文件头 */
 static uint8_t  s_wait_end_hdr = 0;     /* WAIT_EOT: 已 ACK 二次 EOT, 等待空包 */
 
 static uint8_t  s_pkt[YM_MAX_PKT_SIZE];
@@ -154,7 +153,6 @@ static void HandleHeader(const uint8_t *data)
         return;
     }
 
-    s_started        = 1;
     s_expected_seq   = 1;
     s_error_cnt      = 0;
     s_wait_end_hdr   = 0;
@@ -283,7 +281,6 @@ void ymodem_init(const ymodem_callbacks_t *cb)
 void ymodem_start(void)
 {
     s_state        = YMODEM_WAIT_HEADER;
-    s_started      = 0;
     s_pkt_idx      = 0;
     s_expected_seq = 1;
     s_error_cnt    = 0;
@@ -294,7 +291,6 @@ void ymodem_start(void)
 void ymodem_stop(void)
 {
     s_state        = YMODEM_IDLE;
-    s_started      = 0;
     s_pkt_idx      = 0;
     s_expected_seq = 1;
     s_error_cnt    = 0;
@@ -403,9 +399,4 @@ void ymodem_tick(void)
 ymodem_state_t ymodem_state(void)
 {
     return s_state;
-}
-
-uint8_t ymodem_started(void)
-{
-    return s_started;
 }

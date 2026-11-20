@@ -54,7 +54,6 @@ static void PrintBanner(void)
     printf("\r\n============================================\r\n");
     printf("  STM32F411 Bootloader v%s\r\n", BL_VERSION_STR);
     printf("  Protocol : YMODEM (CRC16, SOH/STX)\r\n");
-    printf("  Build    : %s %s\r\n", __DATE__, __TIME__);
     printf("============================================\r\n");
 }
 
@@ -124,7 +123,7 @@ int main(void)
      * 清零——升级成功提交后 (updater.c Finalize) 与 APP 稳定运行后
      * 调用 boot_api.h 的 Boot_ReportHealthy()。崩在启动阶段的固件
      * 到不了上报点, 计数得以连续累积, 达到上限后停在升级模式 */
-    Updater_Begin(0);
+    Updater_Begin();
 
     /* ---- 3. 升级主循环 (完成后自动跳转 APP) ---- */
     while (1)

@@ -72,7 +72,4 @@ void ymodem_tick(void);
 
 ymodem_state_t ymodem_state(void);
 
-/* 是否已收到有效文件头 (Boot 窗口用于判断用户是否开始升级) */
-uint8_t ymodem_started(void);
-
 #endif /* __YMODEM_H */
