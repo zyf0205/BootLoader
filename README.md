@@ -15,7 +15,7 @@
 | 串口 | USART1，PA9/PA10，115200-8-N-1 |
 | 协议 | YMODEM CRC16，支持 128 B SOH 与 1 KB STX 数据包 |
 | 分区 | BL 16 KB / APP 240 KB / Metadata 128 KB / Reserved 128 KB |
-| Bootloader 体积 | 12476 B / 16384 B 上限（ARM Compiler 5 `-O0` 口径） |
+| Bootloader 体积 | 12332 B / 16384 B 上限（ARM Compiler 5 `-O0` 口径） |
 | 构建 | Windows Keil MDK 或 VSCode + EIDE，均使用 ARM Compiler 5 |
 
 ## 架构
