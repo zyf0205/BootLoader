@@ -51,12 +51,12 @@ static inline void Boot_RequestBootloader(void)
 }
 
 /**
- * @brief  上报 APP 致命异常并复位 (在 HardFault 处理器中调用, 不返回)
+ * @brief  上报 APP 致命异常并复位 (在内核异常处理器中调用, 不返回)
  *
  * BKP4R 计数 +1 后立即系统复位。Bootloader 启动时读取该计数, 连续
  * Fault 复位达到其配置上限 (boot_config.h BOOT_FAULT_LIMIT, 当前 3 次)
  * 后不再自动跳 APP, 停在升级模式等待修复, 避免 Fault-复位-Fault
- * 无限循环。Bootloader 自身的 HardFault 同样计入该计数。
+ * 无限循环。Bootloader 自身的同名内核异常同样计入该计数。
  *
  * 计数只由两处清零: 升级成功提交后由 Bootloader 清零, 以及 APP 稳定
  * 运行后调用 Boot_ReportHealthy()。不要在 APP 启动早期调用后者。

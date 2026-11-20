@@ -8,11 +8,16 @@
  * 本文件只保留 Cortex 内核异常。
  * ================================================================== */
 
+/* 除 HardFault 外的内核异常同样上报后复位: 停在 while(1) 会丢掉
+ * 自动恢复能力, 也无法把控制权交回升级模式 */
+static void FaultReset(void)
+{
+    Boot_ReportFaultReset();
+}
+
 void NMI_Handler(void)
 {
-    while (1)
-    {
-    }
+    FaultReset();
 }
 
 /* HardFault 汇编入口: 根据 EXC_RETURN 的 bit2 判断异常发生时
@@ -40,23 +45,17 @@ void HardFault_Handler_C(uint32_t *stack)
 
 void MemManage_Handler(void)
 {
-    while (1)
-    {
-    }
+    FaultReset();
 }
 
 void BusFault_Handler(void)
 {
-    while (1)
-    {
-    }
+    FaultReset();
 }
 
 void UsageFault_Handler(void)
 {
-    while (1)
-    {
-    }
+    FaultReset();
 }
 
 void SVC_Handler(void)
