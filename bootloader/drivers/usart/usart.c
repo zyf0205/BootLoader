@@ -11,13 +11,13 @@
  * ================================================================== */
 #define RX_DMA_STREAM   DMA2_Stream2
 #define RX_DMA_CHANNEL  DMA_Channel_4
+#define RX_DMA_TC_FLAG  DMA_FLAG_TCIF2   /* 环形回卷 (传输完成) 粘滞标志 */
 #define TX_TIMEOUT_MS   100     /* 发送忙等超时兜底 */
 
 /* ---- RX 环形缓冲 ---- */
 static uint8_t  s_rx_buf[USART_RX_BUF_SIZE];
 static uint16_t s_rx_read_pos = 0;      /* 消费位置 (仅主循环访问) */
-static uint16_t s_rx_last_write = 0;    /* 上次轮询时的写位置 (溢出检测) */
-static uint8_t  s_rx_overflow = 0;      /* DMA 覆盖未读数据标志 */
+static uint8_t  s_rx_overflow = 0;      /* DMA 回卷覆盖未读数据标志 */
 
 /* ---- printf 重定向 (microlib) ---- */
 struct __FILE { int handle; };
@@ -89,14 +89,16 @@ void Usart_Init(void)
     dma.DMA_PeripheralBurst    = DMA_PeripheralBurst_Single;
     DMA_Init(RX_DMA_STREAM, &dma);
     USART_DMACmd(CONSOLE_USART, USART_DMAReq_Rx, ENABLE);
+
+    /* 清掉配置阶段可能置位的回卷标志, 避免把初始化当成溢出 */
+    DMA_ClearFlag(RX_DMA_STREAM, RX_DMA_TC_FLAG);
     DMA_Cmd(RX_DMA_STREAM, ENABLE);
 
     /* 5. 使能串口 */
     USART_Cmd(CONSOLE_USART, ENABLE);
 
-    s_rx_read_pos   = 0;
-    s_rx_last_write = 0;
-    s_rx_overflow   = 0;
+    s_rx_read_pos = 0;
+    s_rx_overflow = 0;
 }
 
 void Usart_Putc(uint8_t ch)
@@ -113,21 +115,22 @@ void Usart_Putc(uint8_t ch)
 
 uint16_t Usart_RxAvailable(void)
 {
-    uint16_t write_pos = Usart_RxWritePos();
-    uint16_t new_bytes = (uint16_t)((write_pos - s_rx_last_write + USART_RX_BUF_SIZE) %
-                                    USART_RX_BUF_SIZE);
+    uint16_t write_pos;
 
-    if (new_bytes != 0)
+    /* 环形回卷检测: 写指针绕过整圈说明未读数据已被覆盖。传输完成标志
+     * 由硬件置位并保持到显式清除, 不像中断那样会被长时间阻塞 (如擦除
+     * Flash 期间取指停顿) 合并丢失; 也使"恰好写入整数圈、写指针回到
+     * 起点"的情形不再漏检。先清标志再读位置: 两步之间的回卷会重新置位,
+     * 留到下一次轮询处理, 不会漏
+     */
+    if (DMA_GetFlagStatus(RX_DMA_STREAM, RX_DMA_TC_FLAG) != RESET)
     {
-        /* 本次新写入的字节数超过了剩余空闲空间, 说明 DMA 环形
-         * 回卷已覆盖未读数据, 缓冲内容不可信 */
-        uint16_t free_space = (uint16_t)(USART_RX_BUF_SIZE - 1 -
-            ((s_rx_last_write - s_rx_read_pos + USART_RX_BUF_SIZE) %
-             USART_RX_BUF_SIZE));
-        if (new_bytes > free_space)
-            s_rx_overflow = 1;
-        s_rx_last_write = write_pos;
+        DMA_ClearFlag(RX_DMA_STREAM, RX_DMA_TC_FLAG);
+        s_rx_overflow = 1;
     }
+
+    write_pos = Usart_RxWritePos();
+
     return (uint16_t)((write_pos - s_rx_read_pos + USART_RX_BUF_SIZE) %
                       USART_RX_BUF_SIZE);
 }
@@ -144,9 +147,9 @@ uint8_t Usart_ReadByte(uint8_t *byte)
 
 void Usart_FlushRx(void)
 {
-    s_rx_read_pos   = Usart_RxWritePos();
-    s_rx_last_write = s_rx_read_pos;
-    s_rx_overflow   = 0;   /* 数据已丢弃, 溢出标志一并清除, 避免重复重启 */
+    s_rx_read_pos = Usart_RxWritePos();
+    DMA_ClearFlag(RX_DMA_STREAM, RX_DMA_TC_FLAG);   /* 丢弃的数据不再算回卷 */
+    s_rx_overflow = 0;   /* 数据已丢弃, 溢出标志一并清除, 避免重复重启 */
 }
 
 uint8_t Usart_TakeRxOverflow(void)
@@ -174,5 +177,6 @@ void Usart_DeInit(void)
     DMA_DeInit(RX_DMA_STREAM);
     USART_Cmd(CONSOLE_USART, DISABLE);
     USART_DeInit(CONSOLE_USART);
+    DMA_ClearFlag(RX_DMA_STREAM, RX_DMA_TC_FLAG);
     s_rx_overflow = 0;
 }
