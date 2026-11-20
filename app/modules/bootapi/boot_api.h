@@ -57,6 +57,9 @@ static inline void Boot_RequestBootloader(void)
  * Fault 复位达到其配置上限 (boot_config.h BOOT_FAULT_LIMIT, 当前 3 次)
  * 后不再自动跳 APP, 停在升级模式等待修复, 避免 Fault-复位-Fault
  * 无限循环。Bootloader 自身的 HardFault 同样计入该计数。
+ *
+ * 计数只由两处清零: 升级成功提交后由 Bootloader 清零, 以及 APP 稳定
+ * 运行后调用 Boot_ReportHealthy()。不要在 APP 启动早期调用后者。
  */
 static inline void Boot_ReportFaultReset(void)
 {
@@ -70,6 +73,27 @@ static inline void Boot_ReportFaultReset(void)
 
     __DSB();
     NVIC_SystemReset();
+}
+
+/**
+ * @brief  上报 APP 已稳定运行, 清零连续 Fault 复位计数
+ *
+ * 调用时机: APP 初始化完成、确认运行正常之后 (演示 APP 为启动后 5 s)。
+ * 崩溃循环中的固件反复复位, 到不了这个上报点, 计数才能连续累积到
+ * Bootloader 上限并让它停在升级模式; 在启动早期调用会让保护完全失效。
+ *
+ * 不做上报的固件: 计数只在升级成功时清零, 偶发的多次崩溃会累积并
+ * 最终停在升级模式。
+ */
+static inline void Boot_ReportHealthy(void)
+{
+    RCC->APB1ENR |= RCC_APB1ENR_PWREN;
+    PWR->CR |= PWR_CR_DBP;
+
+    BOOT_BKP_FAULT_REG = 0;
+
+    __DSB();
+    PWR->CR &= ~PWR_CR_DBP;
 }
 
 #endif /* __BOOT_API_H */

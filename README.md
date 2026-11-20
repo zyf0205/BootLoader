@@ -59,7 +59,7 @@ flowchart TD
   包内 `CAN CAN` 快速中止、重复包去重、最终 ACK 丢失重传兼容。
 - **数据通路**：USART1 + DMA2_Stream2 循环缓冲，主循环轮询，溢出可检测。
 - **启动安全**：三重校验（元数据 / 向量表 / 全固件 CRC32）+ 跨镜像 HardFault
-  循环保护（RTC BKP4R 计数，BL 自身与 APP 经 `boot_api.h` 共同上报）。
+  循环保护（RTC BKP4R 计数，BL 自身与 APP 经 `boot_api.h` 共同上报，APP 稳定运行后自清）。
 
 ## 目录
 
@@ -93,8 +93,10 @@ LED 快闪提示后复位，业务固件可直接调用 `Boot_RequestBootloader(
 
 升级带防降级保护：APP 实际完好（元数据、向量表、CRC32 全部通过）时，文件名版本
 （`vX.Y`）低于已装版本的固件会被拒绝；APP 损坏或文件名无版本号时不做限制，
-保证旧版本可救砖。Bootloader 另有 HardFault 复位循环保护：APP 经 `boot_api.h` 上报
-或 Bootloader 自身连续 3 次异常复位后停留在升级模式等待修复。
+保证旧版本可救砖。Bootloader 另有 HardFault 复位循环保护：Bootloader 自身与 APP 经
+`boot_api.h` 的 `Boot_ReportFaultReset()` 上报的致命异常累计到 3 次时，不再自动跳 APP，
+停在升级模式等待修复。计数只由升级成功和 APP 稳定运行后的 `Boot_ReportHealthy()` 清零，
+崩溃循环的固件到不了上报点，因此计数能连续累积。
 
 ## 设计取舍与已知局限
 

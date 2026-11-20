@@ -30,7 +30,8 @@ uint32_t Boot_PeekFaultResets(void);
 /* HardFault 处理中记录一次复位 (计数封顶 0xFFFF, 防溢出) */
 void Boot_RecordFaultReset(void);
 
-/* 正常启动跳转前 / 升级成功后清零计数 (进入升级模式不清零, 形成闩锁) */
+/* 升级成功后清零计数。不要在跳转前调用: 崩溃循环的 APP 会每次重新
+ * 获得清零。APP 侧由 boot_api.h 的 Boot_ReportHealthy() 在稳定运行后清零 */
 void Boot_ClearFaultResets(void);
 
 #endif /* __BOOT_H */

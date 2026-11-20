@@ -97,7 +97,6 @@ int main(void)
     if (reason == BOOT_REASON_NORMAL)
     {
         printf("\r\nAPP verified. Jumping...\r\n");
-        Boot_ClearFaultResets();
         Boot_JumpToApp();
         printf("APP jump failed. Enter recovery mode.\r\n");
     }
@@ -120,9 +119,11 @@ int main(void)
 
     printf("Waiting for YMODEM (send App.bin)...\r\n\r\n");
     Led_Set(LED_BLINK_SLOW);
-    /* Fault 计数刻意不清零: 达到上限后进入 recovery 的固件可能仍会
-     * 被判为"有效"而跳转, 清零会让断电重上电重新获得 3 次机会。
-     * 计数在正常启动跳转前清零, 重新烧写并成功启动后自然解除 */
+    /* Fault 计数刻意不在跳转前清零: 若在跳转前清零, 崩溃循环的 APP
+     * 每次复位都会重新拿到清零, 计数永远到不了上限。计数只由两处
+     * 清零——升级成功提交后 (updater.c Finalize) 与 APP 稳定运行后
+     * 调用 boot_api.h 的 Boot_ReportHealthy()。崩在启动阶段的固件
+     * 到不了上报点, 计数得以连续累积, 达到上限后停在升级模式 */
     Updater_Begin(0);
 
     /* ---- 3. 升级主循环 (完成后自动跳转 APP) ---- */

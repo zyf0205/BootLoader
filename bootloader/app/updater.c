@@ -264,7 +264,7 @@ static void Finalize(void)
 
     /* 升级成功: 固件已被校验与提交, Fault 计数失去意义, 复位前清零。
      * 未在此路径清零的 Fault 计数 (recovery 中放弃升级直接断电) 会
-     * 继续闩锁, 直到下一次正常启动或成功升级 */
+     * 继续闩锁, 直到新 APP 稳定运行后调用 Boot_ReportHealthy() */
     Boot_ClearFaultResets();
 
     printf("\r\nUpdate success! Rebooting to APP in %d s...\r\n",

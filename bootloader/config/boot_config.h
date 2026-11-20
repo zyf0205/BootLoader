@@ -15,8 +15,8 @@
 #define BOOT_POST_UPDATE_MAGIC  0x504F5354  /* "POST" */
 
 /* 连续 HardFault 复位达到该次数后, 不再自动跳 APP, 停在升级模式
- * (计数存 RTC BKP4R, 正常启动跳转前或升级成功提交后清零; 进入
- * 升级模式本身不清零, 形成"必须修复才解除"的闩锁) */
+ * (计数存 RTC BKP4R, 由升级成功提交与 APP 的 Boot_ReportHealthy()
+ * 清零; 进入升级模式本身不清零, 形成"必须修复才解除"的闩锁) */
 #define BOOT_FAULT_LIMIT        3
 
 #endif /* __BOOT_CONFIG_H */

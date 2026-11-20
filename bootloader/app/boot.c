@@ -174,7 +174,8 @@ void Boot_RecordFaultReset(void)
     PWR->CR &= ~PWR_CR_DBP;
 }
 
-/* 系统恢复正常后清零计数 (仅在正常跳转 APP 前与升级成功提交后调用) */
+/* 系统恢复正常后清零计数 (升级成功提交后调用; APP 侧由
+ * boot_api.h 的 Boot_ReportHealthy() 在稳定运行后清零) */
 void Boot_ClearFaultResets(void)
 {
     RCC->APB1ENR |= RCC_APB1ENR_PWREN;
