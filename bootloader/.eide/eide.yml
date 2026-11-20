@@ -103,7 +103,7 @@ targets:
             C_FLAGS: --diag_suppress=1 --diag_suppress=1295
             c99-mode: true
             one-elf-section-per-function: true
-            optimization: level-2
+            optimization: level-0
             warnings: unspecified
           global:
             output-debug-info: enable
