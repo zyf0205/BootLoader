@@ -75,12 +75,12 @@ BootLoader/
 │   └── libraries/           CMSIS 和 STM32 StdPeriph
 ├── app/                     演示 APP 独立 Keil/EIDE 工程
 ├── docs/                    构建、设计和升级文档
-└── BootLoader.code-workspace
+└── LICENSE
 ```
 
 ## 快速开始
 
-1. 用 VSCode + EIDE 打开 `BootLoader.code-workspace`，或分别用 Keil 打开两个子工程的 `.uvprojx`。
+1. 用 VSCode + EIDE 打开 `bootloader/bootloader.code-workspace` 和 `app/app.code-workspace`，或分别用 Keil 打开两个子工程的 `.uvprojx`。
 2. 构建 `bootloader` 工程，通过 ST-Link 烧录 Bootloader。
 3. 构建 `app` 工程，得到 `app/build/app/App.bin`。
 4. 串口工具选择 115200-8-N-1 和 `Ymodem`，发送 `App.bin`。发送器可自动选择 128 B SOH 或 1 KB STX 数据包。
@@ -113,4 +113,3 @@ LED 快闪提示后复位，业务固件可直接调用 `Boot_RequestBootloader(
 - [架构详解](docs/架构详解.md)：升级闭环全景图、分层架构图、启动决策与升级时序图、YMODEM/updater 状态机、掉电安全与 RX 数据通路图、设计决策
 - [系统设计](docs/系统设计.md)：Flash 分区图、启动决策流程图、升级流程概要与跳转流程
 - [升级与排错](docs/升级与排错.md)：YMODEM 操作、LED 状态和常见问题
-- [CHANGELOG](CHANGELOG.md)：版本演进与显著变更
